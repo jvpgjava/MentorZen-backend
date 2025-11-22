@@ -1,0 +1,765 @@
+{
+	"info": {
+		"_postman_id": "mentorzen-api-collection",
+		"name": "Mentor de Redação Zen - API",
+		"description": "Collection completa da API REST do Mentor de Redação Zen. Inclui todos os endpoints de autenticação, redações, feedbacks e perfil de usuário.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "mentorzen"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    pm.environment.set(\"token\", response.token);",
+									"    pm.environment.set(\"userId\", response.user.id);",
+									"    console.log(\"Token salvo automaticamente!\");",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"joao@exemplo.com\",\n    \"password\": \"password\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						},
+						"description": "Autentica um usuário e retorna um token JWT. O token é salvo automaticamente na variável de ambiente."
+					},
+					"response": []
+				},
+				{
+					"name": "Register",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Novo Usuário\",\n    \"email\": \"novo@exemplo.com\",\n    \"password\": \"senha123\",\n    \"schoolGrade\": \"3º Ano\",\n    \"studyGoals\": \"Passar no ENEM com nota acima de 800\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"register"
+							]
+						},
+						"description": "Registra um novo usuário no sistema."
+					},
+					"response": []
+				},
+				{
+					"name": "Forgot Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"joao@exemplo.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/forgot-password",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"forgot-password"
+							]
+						},
+						"description": "Solicita recuperação de senha. Envia email com token de recuperação."
+					},
+					"response": []
+				},
+				{
+					"name": "Reset Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"token\": \"token_de_recuperacao_aqui\",\n    \"newPassword\": \"novaSenha123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/reset-password",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"reset-password"
+							]
+						},
+						"description": "Redefine a senha usando o token de recuperação recebido por email."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/auth/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"me"
+							]
+						},
+						"description": "Retorna os dados do usuário autenticado."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints de autenticação e autorização."
+		},
+		{
+			"name": "Essays",
+			"item": [
+				{
+					"name": "Create Essay",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"A Importância da Educação Digital no Brasil\",\n    \"theme\": \"Com base na leitura dos textos motivadores e nos conhecimentos construídos ao longo de sua formação, redija texto dissertativo-argumentativo em modalidade escrita formal da língua portuguesa sobre o tema 'A importância da educação digital no Brasil', apresentando proposta de intervenção que respeite os direitos humanos.\",\n    \"content\": \"A educação digital no Brasil representa um dos maiores desafios contemporâneos. Em um país marcado por desigualdades sociais e regionais, o acesso à tecnologia e à internet ainda não é universal, o que acentua as disparidades educacionais. No entanto, a pandemia de COVID-19 acelerou a necessidade de implementar políticas públicas efetivas para garantir que todos os estudantes tenham acesso a recursos digitais de qualidade. A educação digital não se limita apenas ao uso de ferramentas tecnológicas, mas envolve o desenvolvimento de competências essenciais para o século XXI, como pensamento crítico, criatividade e colaboração. Portanto, é fundamental que o governo, em parceria com instituições educacionais e empresas privadas, invista em infraestrutura, capacitação de professores e desenvolvimento de conteúdos pedagógicos digitais acessíveis e de qualidade.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/essays",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"essays"
+							]
+						},
+						"description": "Cria uma nova redação em rascunho."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Essays",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/essays?page=0&size=10&sortBy=updatedAt&sortDir=desc",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"essays"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0",
+									"description": "Número da página (0-indexed)"
+								},
+								{
+									"key": "size",
+									"value": "10",
+									"description": "Tamanho da página"
+								},
+								{
+									"key": "sortBy",
+									"value": "updatedAt",
+									"description": "Campo para ordenação"
+								},
+								{
+									"key": "sortDir",
+									"value": "desc",
+									"description": "Direção da ordenação (asc/desc)"
+								}
+							]
+						},
+						"description": "Lista todas as redações do usuário autenticado com paginação."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Essay by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/essays/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"essays",
+								"1"
+							]
+						},
+						"description": "Busca uma redação específica por ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Essay",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"A Importância da Educação Digital no Brasil - Revisado\",\n    \"theme\": \"Com base na leitura dos textos motivadores e nos conhecimentos construídos ao longo de sua formação, redija texto dissertativo-argumentativo em modalidade escrita formal da língua portuguesa sobre o tema 'A importância da educação digital no Brasil', apresentando proposta de intervenção que respeite os direitos humanos.\",\n    \"content\": \"A educação digital no Brasil representa um dos maiores desafios contemporâneos. Em um país marcado por desigualdades sociais e regionais, o acesso à tecnologia e à internet ainda não é universal, o que acentua as disparidades educacionais. No entanto, a pandemia de COVID-19 acelerou a necessidade de implementar políticas públicas efetivas para garantir que todos os estudantes tenham acesso a recursos digitais de qualidade. A educação digital não se limita apenas ao uso de ferramentas tecnológicas, mas envolve o desenvolvimento de competências essenciais para o século XXI, como pensamento crítico, criatividade e colaboração. Portanto, é fundamental que o governo, em parceria com instituições educacionais e empresas privadas, invista em infraestrutura, capacitação de professores e desenvolvimento de conteúdos pedagógicos digitais acessíveis e de qualidade. Além disso, é necessário criar mecanismos de avaliação e monitoramento para garantir a efetividade dessas políticas.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/essays/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"essays",
+								"1"
+							]
+						},
+						"description": "Atualiza uma redação existente. Apenas redações em rascunho podem ser editadas."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Essay",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/essays/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"essays",
+								"1"
+							]
+						},
+						"description": "Deleta uma redação. Apenas redações em rascunho podem ser deletadas."
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Essay for Analysis",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/essays/1/submit",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"essays",
+								"1",
+								"submit"
+							]
+						},
+						"description": "Submete uma redação para análise automática com IA. A redação deve estar em rascunho."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Essays by Status",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/essays/status/DRAFT",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"essays",
+								"status",
+								"DRAFT"
+							]
+						},
+						"description": "Busca redações por status. Valores possíveis: DRAFT, SUBMITTED, ANALYZED, ARCHIVED"
+					},
+					"response": []
+				},
+				{
+					"name": "Search Essays",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/essays/search?keyword=educação&page=0&size=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"essays",
+								"search"
+							],
+							"query": [
+								{
+									"key": "keyword",
+									"value": "educação",
+									"description": "Palavra-chave para busca"
+								},
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Busca redações por palavra-chave no título, tema ou conteúdo."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para gerenciamento de redações."
+		},
+		{
+			"name": "Feedbacks",
+			"item": [
+				{
+					"name": "Get Essay Feedbacks",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/feedbacks/essay/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"feedbacks",
+								"essay",
+								"1"
+							]
+						},
+						"description": "Retorna todos os feedbacks de uma redação específica."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Feedback by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/feedbacks/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"feedbacks",
+								"1"
+							]
+						},
+						"description": "Retorna um feedback específico por ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Feedbacks",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/feedbacks/user",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"feedbacks",
+								"user"
+							]
+						},
+						"description": "Retorna todos os feedbacks do usuário autenticado."
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Stats",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/feedbacks/user/stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"feedbacks",
+								"user",
+								"stats"
+							]
+						},
+						"description": "Retorna estatísticas de desempenho do usuário: nota média, número de feedbacks e total de redações."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para visualização e gerenciamento de feedbacks."
+		},
+		{
+			"name": "Profile",
+			"item": [
+				{
+					"name": "Update Profile",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"João Silva Atualizado\",\n    \"email\": \"joao.silva@exemplo.com\",\n    \"phone\": \"(11) 98765-4321\",\n    \"schoolGrade\": \"3º Ano\",\n    \"studyGoals\": \"Passar no ENEM com nota acima de 900\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/profile",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"profile"
+							]
+						},
+						"description": "Atualiza as informações do perfil do usuário."
+					},
+					"response": []
+				},
+				{
+					"name": "Change Password",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"currentPassword\": \"password\",\n    \"newPassword\": \"novaSenha123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/profile/password",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"profile",
+								"password"
+							]
+						},
+						"description": "Altera a senha do usuário autenticado."
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Profile Picture",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": [],
+									"description": "Arquivo de imagem (JPG, PNG, GIF) - máximo 25MB"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/profile/picture",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"profile",
+								"picture"
+							]
+						},
+						"description": "Faz upload de uma foto de perfil. Formatos aceitos: JPG, PNG, GIF. Tamanho máximo: 25MB."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Account",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/profile",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"profile"
+							]
+						},
+						"description": "Deleta permanentemente a conta do usuário e todos os seus dados."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para gerenciamento de perfil do usuário."
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+
