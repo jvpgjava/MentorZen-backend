@@ -6,6 +6,7 @@ import com.mentorzen.domain.entity.Essay;
 import com.mentorzen.domain.entity.Feedback;
 import com.mentorzen.domain.entity.User;
 import com.mentorzen.domain.repository.EssayRepository;
+import com.mentorzen.domain.repository.FeedbackRepository;
 import com.mentorzen.infrastructure.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
