@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="003-create-feedbacks-table" author="JGrando">
+        <comment>Criar tabela de feedbacks para armazenar feedback de IA e humano sobre as redações</comment>
+        
+        <createTable tableName="feedbacks">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="essay_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="overall_score" type="INTEGER"/>
+            <column name="competence1_score" type="INTEGER"/>
+            <column name="competence2_score" type="INTEGER"/>
+            <column name="competence3_score" type="INTEGER"/>
+            <column name="competence4_score" type="INTEGER"/>
+            <column name="competence5_score" type="INTEGER"/>
+            <column name="competence1_comment" type="TEXT"/>
+            <column name="competence2_comment" type="TEXT"/>
+            <column name="competence3_comment" type="TEXT"/>
+            <column name="competence4_comment" type="TEXT"/>
+            <column name="competence5_comment" type="TEXT"/>
+            <column name="general_comment" type="TEXT"/>
+            <column name="positive_points" type="TEXT"/>
+            <column name="suggestions" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="feedbacks"
+                baseColumnNames="essay_id"
+                constraintName="fk_feedbacks_essay"
+                referencedTableName="essays"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <createIndex tableName="feedbacks" indexName="idx_feedbacks_essay_id">
+            <column name="essay_id"/>
+        </createIndex>
+
+        <createIndex tableName="feedbacks" indexName="idx_feedbacks_type">
+            <column name="type"/>
+        </createIndex>
+
+        <createIndex tableName="feedbacks" indexName="idx_feedbacks_created_at">
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

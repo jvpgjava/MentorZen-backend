@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="001-create-users-table" author="JGrando">
+        <comment>Criar tabela de usuários para autenticação</comment>
+        
+        <createTable tableName="users">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="email" type="VARCHAR(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="password" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="school_grade" type="VARCHAR(100)"/>
+            <column name="study_goals" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="users" indexName="idx_users_email">
+            <column name="email"/>
+        </createIndex>
+
+        <createIndex tableName="users" indexName="idx_users_role">
+            <column name="role"/>
+        </createIndex>
+
+        <insert tableName="users">
+            <column name="name" value="Admin"/>
+            <column name="email" value="admin@mentorzen.com"/>
+            <column name="password" value="$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi"/> <!-- password -->
+            <column name="role" value="ADMIN"/>
+            <column name="school_grade" value="N/A"/>
+            <column name="study_goals" value="Administração do Sistema"/>
+        </insert>
+
+        <insert tableName="users">
+            <column name="name" value="João Silva"/>
+            <column name="email" value="joao@exemplo.com"/>
+            <column name="password" value="$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi"/> <!-- password -->
+            <column name="role" value="STUDENT"/>
+            <column name="school_grade" value="3º Ano"/>
+            <column name="study_goals" value="Passar no ENEM e entrar na universidade"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
