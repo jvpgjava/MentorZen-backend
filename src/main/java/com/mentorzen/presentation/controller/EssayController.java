@@ -22,8 +22,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import com.mentorzen.domain.repository.UserRepository;
+import com.mentorzen.infrastructure.exception.BusinessException;
 
 import java.util.List;
 
@@ -37,6 +39,13 @@ import java.util.List;
 public class EssayController {
 
     private final EssayService essayService;
+    private final UserRepository userRepository;
+
+    private User getCurrentUser(Authentication authentication) {
+        String email = authentication.getName();
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new BusinessException("Usuário não encontrado"));
+    }
 
     @PostMapping
     @Operation(
@@ -53,8 +62,9 @@ public class EssayController {
             @Valid @RequestBody
             @Parameter(description = "Dados da redação a ser criada", required = true)
             EssayCreateRequest request,
-            @AuthenticationPrincipal User user) {
+            Authentication authentication) {
 
+        User user = getCurrentUser(authentication);
         log.info("Criando nova redação para usuário: {}", user.getEmail());
         EssayResponse response = essayService.createEssay(request, user);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -75,8 +85,9 @@ public class EssayController {
             @PathVariable
             @Parameter(description = "ID da redação", required = true, example = "1")
             Long id,
-            @AuthenticationPrincipal User user) {
+            Authentication authentication) {
 
+        User user = getCurrentUser(authentication);
         log.info("Buscando redação ID: {} para usuário: {}", id, user.getEmail());
         EssayResponse response = essayService.getEssayById(id, user);
         return ResponseEntity.ok(response);
@@ -97,8 +108,9 @@ public class EssayController {
             @Parameter(description = "ID da redação", required = true)
             Long id,
             @Valid @RequestBody EssayCreateRequest request,
-            @AuthenticationPrincipal User user) {
+            Authentication authentication) {
 
+        User user = getCurrentUser(authentication);
         log.info("Atualizando redação ID: {} para usuário: {}", id, user.getEmail());
         EssayResponse response = essayService.updateEssay(id, request, user);
         return ResponseEntity.ok(response);
@@ -116,8 +128,9 @@ public class EssayController {
     })
     public ResponseEntity<Void> deleteEssay(
             @PathVariable Long id,
-            @AuthenticationPrincipal User user) {
+            Authentication authentication) {
 
+        User user = getCurrentUser(authentication);
         log.info("Deletando redação ID: {} para usuário: {}", id, user.getEmail());
         essayService.deleteEssay(id, user);
         return ResponseEntity.noContent().build();
@@ -144,8 +157,9 @@ public class EssayController {
             @RequestParam(defaultValue = "desc")
             @Parameter(description = "Direção da ordenação", example = "desc")
             String sortDir,
-            @AuthenticationPrincipal User user) {
+            Authentication authentication) {
 
+        User user = getCurrentUser(authentication);
         log.info("Buscando redações do usuário: {} - página: {}", user.getEmail(), page);
 
         Sort sort = sortDir.equalsIgnoreCase("desc") ?
@@ -168,8 +182,9 @@ public class EssayController {
     })
     public ResponseEntity<EssayResponse> submitForAnalysis(
             @PathVariable Long id,
-            @AuthenticationPrincipal User user) {
+            Authentication authentication) {
 
+        User user = getCurrentUser(authentication);
         log.info("Submetendo redação ID: {} para análise - usuário: {}", id, user.getEmail());
         EssayResponse response = essayService.submitEssayForAnalysis(id, user);
         return ResponseEntity.ok(response);
@@ -188,8 +203,9 @@ public class EssayController {
             @Parameter(description = "Status das redações", required = true,
                     schema = @Schema(implementation = Essay.EssayStatus.class))
             Essay.EssayStatus status,
-            @AuthenticationPrincipal User user) {
+            Authentication authentication) {
 
+        User user = getCurrentUser(authentication);
         log.info("Buscando redações com status: {} para usuário: {}", status, user.getEmail());
         List<EssayResponse> response = essayService.getUserEssaysByStatus(user, status);
         return ResponseEntity.ok(response);
@@ -213,8 +229,9 @@ public class EssayController {
             @RequestParam(defaultValue = "10")
             @Parameter(description = "Tamanho da página", example = "10")
             int size,
-            @AuthenticationPrincipal User user) {
+            Authentication authentication) {
 
+        User user = getCurrentUser(authentication);
         log.info("Buscando redações com palavra-chave: {} para usuário: {}", keyword, user.getEmail());
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("updatedAt").descending());

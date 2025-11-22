@@ -284,14 +284,23 @@ export JWT_SECRET=sua_chave_jwt_segura_para_desenvolvimento
 
 ### 4. Gerar JWT Secret Seguro
 
-Para desenvolvimento, você pode usar um secret simples. Para produção, **SEMPRE** gere um secret seguro:
+**IMPORTANTE**: O JWT secret deve ter **pelo menos 32 caracteres (256 bits)** para funcionar com HMAC-SHA256. O Nimbus JWT library requer esse tamanho mínimo.
+
+Para desenvolvimento, você pode usar um secret simples de pelo menos 32 caracteres. Para produção, **SEMPRE** gere um secret seguro:
 
 ```bash
-# Usando OpenSSL
+# Usando OpenSSL (gera 32 bytes em base64, resultando em ~44 caracteres)
 openssl rand -base64 32
 ```
 
-Copie o resultado e use como valor de `JWT_SECRET`.
+Ou gere uma string aleatória de pelo menos 32 caracteres:
+
+```bash
+# Usando OpenSSL para gerar string hexadecimal (64 caracteres)
+openssl rand -hex 32
+```
+
+Copie o resultado e use como valor de `JWT_SECRET`. Se o secret for muito curto, a aplicação não iniciará e mostrará um erro.
 
 ## Configuração do Banco de Dados
 

@@ -30,8 +30,10 @@ public class SecurityConfig {
             "/api-docs/**",
             "/swagger-ui.html",
             "/swagger-ui/**",
-            "/auth/login",
-            "/auth/register",
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/forgot-password",
+            "/api/auth/reset-password",
             "/actuator/health"
     };
 
@@ -41,6 +43,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource)
             throws Exception {
+        validateJwtSecret();
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
@@ -51,8 +54,19 @@ public class SecurityConfig {
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(jwtDecoder()))).build();
     }
 
+    private void validateJwtSecret() {
+        if (jwtSecret == null || jwtSecret.length() < 32) {
+            throw new IllegalStateException(
+                    "JWT secret must be at least 32 characters (256 bits) long. " +
+                    "Current length: " + (jwtSecret != null ? jwtSecret.length() : 0) + ". " +
+                    "Please set JWT_SECRET environment variable with a secure secret."
+            );
+        }
+    }
+
     @Bean
     public JwtEncoder jwtEncoder() {
+        validateJwtSecret();
         final SecretKey key = new SecretKeySpec(jwtSecret.getBytes(), "HmacSHA256");
         final JWKSource<SecurityContext> immutableSecret = new ImmutableSecret<>(key);
         return new NimbusJwtEncoder(immutableSecret);
@@ -60,6 +74,7 @@ public class SecurityConfig {
 
     @Bean
     public JwtDecoder jwtDecoder() {
+        validateJwtSecret();
         final SecretKey key = new SecretKeySpec(jwtSecret.getBytes(), "HmacSHA256");
         return NimbusJwtDecoder.withSecretKey(key).build();
     }
