@@ -34,7 +34,8 @@ public class SecurityConfig {
             "/api/auth/register",
             "/api/auth/forgot-password",
             "/api/auth/reset-password",
-            "/actuator/health"
+            "/actuator/health",
+            "/uploads/**"
     };
 
     @Value("${jwt.secret}")
