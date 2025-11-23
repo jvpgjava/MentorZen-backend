@@ -1,13 +1,19 @@
 package com.mentorzen.application.service.impl;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mentorzen.application.service.EssayAnalysisService;
 import com.mentorzen.domain.entity.Essay;
 import com.mentorzen.domain.entity.Feedback;
+import com.mentorzen.infrastructure.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -16,24 +22,20 @@ public class EssayAnalysisServiceImpl implements EssayAnalysisService {
 
     private final WebClient webClient;
 
-    @Value("${google.ai.api-key}")
+    @Value("${google.ai.api-key:}")
     private String googleApiKey;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public Feedback analyzeEssay(Essay essay) {
         log.info("Iniciando análise da redação ID: {}", essay.getId());
 
-        try {
-            String webResearchContext = performWebResearch(essay.getTheme());
-            String prompt = buildAnalysisPrompt(essay, webResearchContext);
-            String aiResponse = callGeminiAPI(prompt);
+        String webResearchContext = performWebResearch(essay.getTheme());
+        String prompt = buildAnalysisPrompt(essay, webResearchContext);
+        String aiResponse = callGeminiAPI(prompt);
 
-            return parseAiResponseToFeedback(aiResponse, essay, webResearchContext);
-
-        } catch (Exception e) {
-            log.error("Erro ao analisar redação ID: {}", essay.getId(), e);
-            return createErrorFeedback(essay, e.getMessage());
-        }
+        return parseAiResponseToFeedback(aiResponse, essay, webResearchContext);
     }
 
     @Override
@@ -41,13 +43,7 @@ public class EssayAnalysisServiceImpl implements EssayAnalysisService {
         log.info("Gerando sugestões de melhoria para redação ID: {}", essay.getId());
 
         String prompt = buildSuggestionPrompt(essay);
-
-        try {
-            return callGeminiAPI(prompt);
-        } catch (Exception e) {
-            log.error("Erro ao gerar sugestões para redação ID: {}", essay.getId(), e);
-            return "Não foi possível gerar sugestões no momento. Tente novamente mais tarde.";
-        }
+        return callGeminiAPI(prompt);
     }
 
     @Override
@@ -198,50 +194,165 @@ public class EssayAnalysisServiceImpl implements EssayAnalysisService {
     }
 
     private String callGeminiAPI(String prompt) {
-        return mockGeminiResponse();
-    }
+        if (googleApiKey == null || googleApiKey.isEmpty() || googleApiKey.trim().isEmpty()) {
+            log.error(
+                    "API do Google Gemini não configurada. Configure a propriedade 'google.ai.api-key' no arquivo de propriedades.");
+            throw new BusinessException(
+                    "API do Google Gemini não está configurada. Por favor, configure a chave da API nas propriedades da aplicação.");
+        }
 
-    private String mockGeminiResponse() {
-        return """
-                {
-                    "notebookLmAnalysis": {
-                        "sourceComparison": "Comparando com 847 redações nota 1000 e Manual ENEM 2024: sua redação está no nível intermediário-avançado",
-                        "competence1": {
-                            "score": 160,
-                            "comment": "Baseado no Manual ENEM: boa demonstração da norma culta, com poucos desvios. Comparando com redações nota 1000, você está no caminho certo.",
-                            "referenceExample": "Nas redações nota 1000, vemos: 'A sociedade contemporânea vivencia...' - note a concordância precisa"
-                        },
-                        "competence2": {
-                            "score": 180,
-                            "comment": "Segundo as fontes de referência: excelente compreensão temática. Seu desenvolvimento está alinhado com os melhores exemplos.",
-                            "referenceExample": "Redações nota 1000 desenvolvem o tema com: 'Nesse contexto, é fundamental analisar...' - estrutura similar à sua"
-                        },
-                        "competence3": {
-                            "score": 140,
-                            "comment": "Conforme o Manual ENEM: argumentação consistente, mas pode ser enriquecida. Nas redações nota 1000, vemos mais repertório diversificado.",
-                            "referenceExample": "Exemplo das fontes: 'Segundo Zygmunt Bauman em Modernidade Líquida...' - repertório filosófico"
-                        },
-                        "competence4": {
-                            "score": 160,
-                            "comment": "Baseado nas melhores práticas: boa articulação. As redações nota 1000 usam conectivos mais variados.",
-                            "referenceExample": "Fontes mostram: 'Ademais', 'Outrossim', 'Por conseguinte' - varie os conectivos"
-                        },
-                        "competence5": {
-                            "score": 120,
-                            "comment": "Segundo o Manual ENEM: proposta presente, mas precisa detalhar mais. Redações nota 1000 especificam agentes e meios.",
-                            "referenceExample": "Exemplo das fontes: 'Cabe ao Ministério da Educação, por meio de campanhas...' - especificidade"
-                        },
-                        "mentalHealthFocus": "Você está no caminho certo! Sua redação mostra evolução e potencial. Cada texto é um passo importante na sua jornada. 🌟",
-                        "generalComment": "Comparando com as fontes NotebookLM: sua redação demonstra domínio da estrutura dissertativa e está bem posicionada para melhorias pontuais.",
-                        "positivePoints": "Estrutura sólida (como nas redações nota 1000), linguagem adequada (conforme Manual ENEM), desenvolvimento coerente, posicionamento claro",
-                        "improvementSuggestions": "1. Repertório: inclua filósofos/sociólogos como nas redações nota 1000. 2. Conectivos: varie conforme Manual ENEM. 3. Intervenção: detalhe agentes como nas melhores redações. 4. Dados: use estatísticas como nas fontes de referência.",
-                        "confidenceBoost": "Lembre-se: você já domina o essencial! Cada redação é uma oportunidade de crescimento. Confie no seu potencial! 💪✨"
-                    }
+        try {
+            log.info("Chamando API do Gemini com prompt de {} caracteres", prompt.length());
+
+            String url = String.format(
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=%s",
+                    googleApiKey);
+
+            Map<String, Object> requestBody = new HashMap<>();
+            Map<String, Object> content = new HashMap<>();
+            Map<String, Object> part = new HashMap<>();
+            part.put("text", prompt);
+            content.put("parts", new Object[] { part });
+            requestBody.put("contents", new Object[] { content });
+
+            Map<String, Object> generationConfig = new HashMap<>();
+            generationConfig.put("temperature", 0.7);
+            generationConfig.put("topK", 40);
+            generationConfig.put("topP", 0.95);
+            generationConfig.put("maxOutputTokens", 8192);
+            requestBody.put("generationConfig", generationConfig);
+
+            String response = webClient.post()
+                    .uri(url)
+                    .header("Content-Type", "application/json")
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .timeout(Duration.ofSeconds(60))
+                    .block();
+
+            log.info("Resposta recebida da API do Gemini: {} caracteres", response != null ? response.length() : 0);
+
+            if (response == null || response.isEmpty()) {
+                log.error("Resposta vazia da API do Gemini");
+                throw new BusinessException(
+                        "A API do Google Gemini retornou uma resposta vazia. Tente novamente mais tarde.");
+            }
+
+            JsonNode jsonNode = objectMapper.readTree(response);
+
+            if (jsonNode.has("error")) {
+                String errorMessage = jsonNode.path("error").path("message")
+                        .asText("Erro desconhecido da API do Gemini");
+                log.error("Erro retornado pela API do Gemini: {}", errorMessage);
+                throw new BusinessException("Erro na API do Google Gemini: " + errorMessage);
+            }
+
+            JsonNode candidates = jsonNode.path("candidates");
+
+            if (candidates.isArray() && candidates.size() > 0) {
+                JsonNode contentNode = candidates.get(0).path("content");
+                JsonNode parts = contentNode.path("parts");
+
+                if (parts.isArray() && parts.size() > 0) {
+                    String text = parts.get(0).path("text").asText();
+                    log.info("Texto extraído da resposta: {} caracteres", text.length());
+                    return text;
                 }
-                """;
+            }
+
+            log.error("Não foi possível extrair texto da resposta da API do Gemini");
+            throw new BusinessException(
+                    "Não foi possível processar a resposta da API do Google Gemini. Tente novamente mais tarde.");
+
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Erro ao chamar API do Gemini: {}", e.getMessage(), e);
+            throw new BusinessException("Erro ao comunicar com a API do Google Gemini: " + e.getMessage());
+        }
     }
 
     private Feedback parseAiResponseToFeedback(String aiResponse, Essay essay, String webResearchContext) {
+        try {
+            JsonNode responseJson = objectMapper.readTree(aiResponse);
+            JsonNode analysis = responseJson.path("notebookLmAnalysis");
+
+            if (analysis.isMissingNode()) {
+                log.warn("Resposta não contém 'notebookLmAnalysis', usando valores padrão");
+                return createDefaultFeedback(essay, webResearchContext);
+            }
+
+            int score1 = analysis.path("competence1").path("score").asInt(160);
+            int score2 = analysis.path("competence2").path("score").asInt(180);
+            int score3 = analysis.path("competence3").path("score").asInt(140);
+            int score4 = analysis.path("competence4").path("score").asInt(160);
+            int score5 = analysis.path("competence5").path("score").asInt(120);
+            int overallScore = score1 + score2 + score3 + score4 + score5;
+
+            String comment1 = analysis.path("competence1").path("comment")
+                    .asText("Boa demonstração do domínio da norma culta.");
+            String comment2 = analysis.path("competence2").path("comment")
+                    .asText("Excelente compreensão do tema proposto.");
+            String comment3 = analysis.path("competence3").path("comment")
+                    .asText("Argumentação consistente, mas pode ser enriquecida.");
+            String comment4 = analysis.path("competence4").path("comment").asText("Boa articulação entre as ideias.");
+            String comment5 = analysis.path("competence5").path("comment")
+                    .asText("Proposta de intervenção presente, mas precisa ser mais detalhada.");
+
+            String detailed1 = analysis.path("competence1").path("detailed").asText("");
+            String detailed2 = analysis.path("competence2").path("detailed").asText("");
+            String detailed3 = analysis.path("competence3").path("detailed").asText("");
+            String detailed4 = analysis.path("competence4").path("detailed").asText("");
+            String detailed5 = analysis.path("competence5").path("detailed").asText("");
+
+            String lineErrors = analysis.path("competence1").path("lineErrors").asText("") + "\n" +
+                    analysis.path("competence2").path("lineErrors").asText("") + "\n" +
+                    analysis.path("competence3").path("lineErrors").asText("") + "\n" +
+                    analysis.path("competence4").path("lineErrors").asText("") + "\n" +
+                    analysis.path("competence5").path("lineErrors").asText("");
+
+            String generalComment = analysis.path("generalComment")
+                    .asText("Sua redação demonstra um bom domínio da estrutura dissertativa.");
+            String positivePoints = analysis.path("positivePoints")
+                    .asText("Estrutura bem organizada, linguagem adequada.");
+            String suggestions = analysis.path("improvementSuggestions")
+                    .asText("Continue praticando e revisando sua redação.");
+
+            return Feedback.builder()
+                    .essay(essay)
+                    .type(Feedback.FeedbackType.AI_GENERATED)
+                    .competence1Score(score1)
+                    .competence2Score(score2)
+                    .competence3Score(score3)
+                    .competence4Score(score4)
+                    .competence5Score(score5)
+                    .overallScore(overallScore)
+                    .competence1Comment(comment1)
+                    .competence2Comment(comment2)
+                    .competence3Comment(comment3)
+                    .competence4Comment(comment4)
+                    .competence5Comment(comment5)
+                    .competence1Detailed(detailed1.isEmpty() ? null : detailed1)
+                    .competence2Detailed(detailed2.isEmpty() ? null : detailed2)
+                    .competence3Detailed(detailed3.isEmpty() ? null : detailed3)
+                    .competence4Detailed(detailed4.isEmpty() ? null : detailed4)
+                    .competence5Detailed(detailed5.isEmpty() ? null : detailed5)
+                    .lineErrors(lineErrors.trim().isEmpty() ? null : lineErrors.trim())
+                    .webResearchContext(webResearchContext)
+                    .generalComment(generalComment)
+                    .positivePoints(positivePoints)
+                    .suggestions(suggestions)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Erro ao parsear resposta do Gemini: {}", e.getMessage(), e);
+            log.warn("Usando feedback padrão devido ao erro de parsing");
+            return createDefaultFeedback(essay, webResearchContext);
+        }
+    }
+
+    private Feedback createDefaultFeedback(Essay essay, String webResearchContext) {
         return Feedback.builder()
                 .essay(essay)
                 .type(Feedback.FeedbackType.AI_GENERATED)
@@ -376,12 +487,4 @@ public class EssayAnalysisServiceImpl implements EssayAnalysisService {
                 .build();
     }
 
-    private Feedback createErrorFeedback(Essay essay, String errorMessage) {
-        return Feedback.builder()
-                .essay(essay)
-                .type(Feedback.FeedbackType.AI_GENERATED)
-                .generalComment("Houve um erro na análise automática. Por favor, tente novamente mais tarde.")
-                .suggestions("Revise sua redação manualmente e consulte o manual do ENEM.")
-                .build();
-    }
 }

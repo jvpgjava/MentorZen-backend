@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +37,7 @@ public class EssayServiceImpl implements EssayService {
         log.info("Criando nova redação para usuário ID: {}", user.getId());
 
         Essay.EssayType essayType = parseEssayType(request.getEssayType());
-        
+
         Essay essay = Essay.builder()
                 .title(request.getTitle())
                 .theme(request.getTheme())
@@ -121,17 +122,7 @@ public class EssayServiceImpl implements EssayService {
         essay.setSubmittedAt(LocalDateTime.now());
         Essay submittedEssay = essayRepository.save(essay);
 
-        try {
-            Feedback feedback = analysisService.analyzeEssay(submittedEssay);
-            feedbackService.saveFeedback(feedback);
-
-            submittedEssay.setStatus(Essay.EssayStatus.ANALYZED);
-            essayRepository.save(submittedEssay);
-
-            log.info("Redação ID: {} analisada com sucesso", id);
-        } catch (Exception e) {
-            log.error("Erro ao analisar redação ID: {}", id, e);
-        }
+        processAnalysisAsync(submittedEssay.getId());
 
         return EssayResponse.fromEntity(submittedEssay);
     }
@@ -161,14 +152,16 @@ public class EssayServiceImpl implements EssayService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<EssayResponse> getUserEssaysWithFilters(User user, Essay.EssayStatus status, String keyword, java.time.LocalDate date, Pageable pageable) {
-        log.info("Buscando redações do usuário ID: {} com filtros - status: {}, keyword: {}, date: {}", user.getId(), status, keyword, date);
+    public Page<EssayResponse> getUserEssaysWithFilters(User user, Essay.EssayStatus status, String keyword,
+            java.time.LocalDate date, Pageable pageable) {
+        log.info("Buscando redações do usuário ID: {} com filtros - status: {}, keyword: {}, date: {}", user.getId(),
+                status, keyword, date);
 
         Page<Essay> essays;
         boolean hasKeyword = keyword != null && !keyword.trim().isEmpty();
         String searchKeyword = hasKeyword ? keyword.trim() : null;
         boolean hasDate = date != null;
-        
+
         LocalDateTime startDate = null;
         LocalDateTime endDate = null;
         if (hasDate) {
@@ -177,13 +170,15 @@ public class EssayServiceImpl implements EssayService {
         }
 
         if (status != null && hasKeyword && hasDate) {
-            essays = essayRepository.findByUserIdAndStatusAndKeywordAndDate(user.getId(), status, searchKeyword, startDate, endDate, pageable);
+            essays = essayRepository.findByUserIdAndStatusAndKeywordAndDate(user.getId(), status, searchKeyword,
+                    startDate, endDate, pageable);
         } else if (status != null && hasKeyword) {
             essays = essayRepository.findByUserIdAndStatusAndKeyword(user.getId(), status, searchKeyword, pageable);
         } else if (status != null && hasDate) {
             essays = essayRepository.findByUserIdAndStatusAndDate(user.getId(), status, startDate, endDate, pageable);
         } else if (hasKeyword && hasDate) {
-            essays = essayRepository.findByUserIdAndKeywordAndDate(user.getId(), searchKeyword, startDate, endDate, pageable);
+            essays = essayRepository.findByUserIdAndKeywordAndDate(user.getId(), searchKeyword, startDate, endDate,
+                    pageable);
         } else if (status != null) {
             essays = essayRepository.findByUserIdAndStatus(user.getId(), status, pageable);
         } else if (hasKeyword) {
@@ -203,6 +198,35 @@ public class EssayServiceImpl implements EssayService {
                 .orElseThrow(() -> new ResourceNotFoundException("Redação não encontrada"));
     }
 
+    @Async("essayAnalysisExecutor")
+    @Transactional
+    public void processAnalysisAsync(Long essayId) {
+        log.info("Iniciando análise assíncrona da redação ID: {}", essayId);
+
+        try {
+            Essay essay = essayRepository.findById(essayId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Redação não encontrada"));
+
+            Feedback feedback = analysisService.analyzeEssay(essay);
+            feedbackService.saveFeedback(feedback);
+
+            essay.setStatus(Essay.EssayStatus.ANALYZED);
+            essayRepository.save(essay);
+
+            log.info("Redação ID: {} analisada com sucesso", essayId);
+        } catch (Exception e) {
+            log.error("Erro ao analisar redação ID: {} em background", essayId, e);
+            try {
+                Essay essay = essayRepository.findById(essayId).orElse(null);
+                if (essay != null && essay.getStatus() == Essay.EssayStatus.SUBMITTED) {
+                    log.warn("Mantendo redação ID: {} com status SUBMITTED devido ao erro", essayId);
+                }
+            } catch (Exception ex) {
+                log.error("Erro ao verificar status da redação ID: {}", essayId, ex);
+            }
+        }
+    }
+
     private Essay.EssayType parseEssayType(String essayType) {
         if (essayType == null || essayType.isEmpty()) {
             return Essay.EssayType.ARGUMENTATIVE;
@@ -214,4 +238,3 @@ public class EssayServiceImpl implements EssayService {
         }
     }
 }
-
