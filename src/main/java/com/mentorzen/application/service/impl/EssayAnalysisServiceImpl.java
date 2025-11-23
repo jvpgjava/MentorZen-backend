@@ -11,8 +11,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -193,6 +196,82 @@ public class EssayAnalysisServiceImpl implements EssayAnalysisService {
                 essay.getTheme(), essay.getContent());
     }
 
+    // Listar modelos de IA
+    private String findAvailableModel() {
+        try {
+            String listUrl = String.format("https://generativelanguage.googleapis.com/v1beta/models?key=%s", googleApiKey);
+
+            String listResponse = webClient.get()
+                    .uri(listUrl)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .timeout(Duration.ofSeconds(10))
+                    .block();
+
+            if (listResponse != null) {
+                JsonNode jsonNode = objectMapper.readTree(listResponse);
+                JsonNode models = jsonNode.path("models");
+
+                List<String> preferredModels = Arrays.asList(
+                        "gemini-1.5-flash",
+                        "gemini-1.5-pro",
+                        "gemini-pro");
+
+                if (models.isArray()) {
+                    for (String preferred : preferredModels) {
+                        for (JsonNode model : models) {
+                            String modelName = model.path("name").asText();
+                            if (modelName.startsWith("models/")) {
+                                modelName = modelName.substring(7);
+                            }
+
+                            if (modelName.contains("preview") || modelName.contains("exp") ||
+                                    modelName.contains("experimental") || modelName.contains("2.5")) {
+                                continue;
+                            }
+
+                            if (modelName.equals(preferred) || modelName.startsWith(preferred + "-")) {
+                                JsonNode supportedMethods = model.path("supportedGenerationMethods");
+                                if (supportedMethods.isArray()) {
+                                    for (JsonNode method : supportedMethods) {
+                                        if ("generateContent".equals(method.asText())) {
+                                            log.info("✅ Modelo preferido encontrado: {}", modelName);
+                                            return modelName;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    for (JsonNode model : models) {
+                        String modelName = model.path("name").asText();
+                        if (modelName.startsWith("models/")) {
+                            modelName = modelName.substring(7);
+                        }
+
+                        if (modelName.contains("preview") || modelName.contains("exp") ||
+                                modelName.contains("experimental") || modelName.contains("2.5")) {
+                            continue;
+                        }
+
+                        JsonNode supportedMethods = model.path("supportedGenerationMethods");
+                        if (supportedMethods.isArray()) {
+                            for (JsonNode method : supportedMethods) {
+                                if ("generateContent".equals(method.asText())) {
+                                    return modelName;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Não foi possível listar modelos disponíveis: {}", e.getMessage());
+        }
+        return null;
+    }
+
     private String callGeminiAPI(String prompt) {
         if (googleApiKey == null || googleApiKey.isEmpty() || googleApiKey.trim().isEmpty()) {
             log.error(
@@ -204,16 +283,65 @@ public class EssayAnalysisServiceImpl implements EssayAnalysisService {
         try {
             log.info("Chamando API do Gemini com prompt de {} caracteres", prompt.length());
 
-            String url = String.format(
-                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=%s",
-                    googleApiKey);
+            String availableModel = findAvailableModel();
+
+            if (availableModel == null) {
+                String[] modelsToTry = {"gemini-1.5-flash-002", "gemini-1.5-pro-002", "gemini-1.5-flash-001", "gemini-1.5-pro-001",
+                        "gemini-pro-002", "gemini-pro-001"};
+
+                String[] apiVersions = { "v1beta", "v1" };
+
+                for (String apiVersion : apiVersions) {
+                    for (String model : modelsToTry) {
+                        try {
+                            String testUrl = String.format(
+                                    "https://generativelanguage.googleapis.com/%s/models/%s:generateContent?key=%s",
+                                    apiVersion, model, googleApiKey);
+
+                            Map<String, Object> testBody = new HashMap<>();
+                            Map<String, Object> testContent = new HashMap<>();
+                            Map<String, Object> testPart = new HashMap<>();
+                            testPart.put("text", "test");
+                            testContent.put("parts", java.util.Arrays.asList(testPart));
+                            testBody.put("contents", java.util.Arrays.asList(testContent));
+
+                            String testResponse = webClient.post()
+                                    .uri(testUrl)
+                                    .header("Content-Type", "application/json")
+                                    .bodyValue(testBody)
+                                    .retrieve()
+                                    .onStatus(status -> status.is4xxClientError(),
+                                            clientResponse -> Mono.error(new RuntimeException("Not available")))
+                                    .bodyToMono(String.class)
+                                    .timeout(Duration.ofSeconds(5))
+                                    .block();
+
+                            if (testResponse != null) {
+                                availableModel = model;
+                                break;
+                            }
+                        } catch (Exception e) {
+                            continue;
+                        }
+                    }
+                    if (availableModel != null)
+                        break;
+                }
+            }
+
+            if (availableModel == null) {
+                throw new BusinessException(
+                        "Nenhum modelo do Google Gemini está disponível. Verifique se a API Generative Language está ativada no Google Cloud Console.");
+            }
+
+            String apiVersion = "v1beta";
 
             Map<String, Object> requestBody = new HashMap<>();
             Map<String, Object> content = new HashMap<>();
             Map<String, Object> part = new HashMap<>();
             part.put("text", prompt);
-            content.put("parts", new Object[] { part });
-            requestBody.put("contents", new Object[] { content });
+            content.put("parts", java.util.Arrays.asList(part));
+            requestBody.put("contents", java.util.Arrays.asList(content));
 
             Map<String, Object> generationConfig = new HashMap<>();
             generationConfig.put("temperature", 0.7);
@@ -222,14 +350,103 @@ public class EssayAnalysisServiceImpl implements EssayAnalysisService {
             generationConfig.put("maxOutputTokens", 8192);
             requestBody.put("generationConfig", generationConfig);
 
-            String response = webClient.post()
-                    .uri(url)
-                    .header("Content-Type", "application/json")
-                    .bodyValue(requestBody)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .timeout(Duration.ofSeconds(60))
-                    .block();
+            try {
+                String requestBodyJson = objectMapper.writeValueAsString(requestBody);
+                log.debug("Request body para Gemini: {}", requestBodyJson);
+            } catch (Exception e) {
+                log.warn("Não foi possível serializar request body para log", e);
+            }
+
+            String url = String.format(
+                    "https://generativelanguage.googleapis.com/%s/models/%s:generateContent?key=%s",
+                    apiVersion, availableModel, googleApiKey);
+
+            log.info("Usando modelo: {} na versão {}", availableModel, apiVersion);
+
+            String response = null;
+            int maxRetries = 3;
+            int retryCount = 0;
+
+            while (retryCount < maxRetries) {
+                try {
+                    response = webClient.post()
+                            .uri(url)
+                            .header("Content-Type", "application/json")
+                            .bodyValue(requestBody)
+                            .retrieve()
+                            .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(),
+                                    clientResponse -> {
+                                        return clientResponse.bodyToMono(String.class)
+                                                .flatMap(errorBody -> {
+                                                    if (clientResponse.statusCode().value() == 429) {
+                                                        try {
+                                                            JsonNode errorJson = objectMapper.readTree(errorBody);
+                                                            JsonNode details = errorJson.path("error").path("details");
+                                                            long retryDelaySeconds = 5;
+
+                                                            if (details.isArray()) {
+                                                                for (JsonNode detail : details) {
+                                                                    if ("google.rpc.RetryInfo"
+                                                                            .equals(detail.path("@type").asText())) {
+                                                                        String retryDelay = detail.path("retryDelay")
+                                                                                .asText();
+
+                                                                        if (retryDelay.endsWith("s")) {
+                                                                            try {
+                                                                                retryDelaySeconds = (long) Math.ceil(
+                                                                                        Double.parseDouble(retryDelay
+                                                                                                .substring(0, retryDelay
+                                                                                                        .length()
+                                                                                                        - 1)));
+                                                                            } catch (NumberFormatException e) {
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            return Mono.delay(Duration.ofSeconds(retryDelaySeconds))
+                                                                    .then(Mono
+                                                                            .error(new RuntimeException("RETRY_429")));
+                                                        } catch (Exception e) {
+                                                            log.error("Erro ao processar resposta 429: {}",
+                                                                    e.getMessage());
+                                                            return Mono.error(new BusinessException(
+                                                                    "Quota da API do Google Gemini excedida. Tente novamente mais tarde."));
+                                                        }
+                                                    }
+
+                                                    log.error("Erro da API Gemini - Status: {}, Body: {}",
+                                                            clientResponse.statusCode(), errorBody);
+                                                    return Mono.error(new BusinessException(
+                                                            "Erro na API do Google Gemini (Status "
+                                                                    + clientResponse.statusCode() + "): " + errorBody));
+                                                });
+                                    })
+                            .bodyToMono(String.class)
+                            .timeout(Duration.ofSeconds(60))
+                            .block();
+
+                    if (response != null && !response.isEmpty()) {
+                        break;
+                    }
+                } catch (RuntimeException e) {
+                    if (e.getMessage() != null && e.getMessage().contains("RETRY_429")) {
+                        retryCount++;
+                        if (retryCount >= maxRetries) {
+                            throw new BusinessException("Quota da API do Google Gemini excedida após " + maxRetries
+                                    + " tentativas. Tente novamente mais tarde.");
+                        }
+                        continue;
+                    }
+                    throw e;
+                }
+            }
+
+            if (response == null || response.isEmpty()) {
+                throw new BusinessException(
+                        "Não foi possível obter resposta da API do Google Gemini após " + maxRetries + " tentativas.");
+            }
 
             log.info("Resposta recebida da API do Gemini: {} caracteres", response != null ? response.length() : 0);
 
@@ -267,6 +484,11 @@ public class EssayAnalysisServiceImpl implements EssayAnalysisService {
 
         } catch (BusinessException e) {
             throw e;
+        } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
+            log.error("Erro HTTP da API do Gemini - Status: {}, Response: {}", e.getStatusCode(),
+                    e.getResponseBodyAsString());
+            throw new BusinessException(
+                    "Erro na API do Google Gemini (Status " + e.getStatusCode() + "): " + e.getResponseBodyAsString());
         } catch (Exception e) {
             log.error("Erro ao chamar API do Gemini: {}", e.getMessage(), e);
             throw new BusinessException("Erro ao comunicar com a API do Google Gemini: " + e.getMessage());
@@ -275,49 +497,132 @@ public class EssayAnalysisServiceImpl implements EssayAnalysisService {
 
     private Feedback parseAiResponseToFeedback(String aiResponse, Essay essay, String webResearchContext) {
         try {
-            JsonNode responseJson = objectMapper.readTree(aiResponse);
+            String cleanedResponse = aiResponse.trim();
+            if (cleanedResponse.startsWith("```json")) {
+                cleanedResponse = cleanedResponse.substring(7);
+            } else if (cleanedResponse.startsWith("```")) {
+                cleanedResponse = cleanedResponse.substring(3);
+            }
+            if (cleanedResponse.endsWith("```")) {
+                cleanedResponse = cleanedResponse.substring(0, cleanedResponse.length() - 3);
+            }
+            cleanedResponse = cleanedResponse.trim();
+
+            JsonNode responseJson = objectMapper.readTree(cleanedResponse);
             JsonNode analysis = responseJson.path("notebookLmAnalysis");
 
             if (analysis.isMissingNode()) {
-                log.warn("Resposta não contém 'notebookLmAnalysis', usando valores padrão");
-                return createDefaultFeedback(essay, webResearchContext);
+                log.error("Resposta da API do Gemini não contém 'notebookLmAnalysis'. Resposta recebida: {}",
+                        cleanedResponse);
+                throw new BusinessException(
+                        "A resposta da API do Google Gemini não está no formato esperado. Verifique a configuração da API.");
             }
 
-            int score1 = analysis.path("competence1").path("score").asInt(160);
-            int score2 = analysis.path("competence2").path("score").asInt(180);
-            int score3 = analysis.path("competence3").path("score").asInt(140);
-            int score4 = analysis.path("competence4").path("score").asInt(160);
-            int score5 = analysis.path("competence5").path("score").asInt(120);
+            JsonNode comp1 = analysis.path("competence1");
+            JsonNode comp2 = analysis.path("competence2");
+            JsonNode comp3 = analysis.path("competence3");
+            JsonNode comp4 = analysis.path("competence4");
+            JsonNode comp5 = analysis.path("competence5");
+
+            if (comp1.isMissingNode() || comp2.isMissingNode() || comp3.isMissingNode() ||
+                    comp4.isMissingNode() || comp5.isMissingNode()) {
+                log.error("Resposta da API não contém todas as competências necessárias. Resposta: {}",
+                        cleanedResponse);
+                throw new BusinessException(
+                        "A resposta da API do Google Gemini não contém todas as competências necessárias.");
+            }
+
+            int score1 = comp1.path("score").asInt();
+            int score2 = comp2.path("score").asInt();
+            int score3 = comp3.path("score").asInt();
+            int score4 = comp4.path("score").asInt();
+            int score5 = comp5.path("score").asInt();
+
+            if (score1 == 0 || score2 == 0 || score3 == 0 || score4 == 0 || score5 == 0) {
+                log.error("Uma ou mais competências têm score 0 ou ausente. Scores: C1={}, C2={}, C3={}, C4={}, C5={}",
+                        score1, score2, score3, score4, score5);
+                throw new BusinessException(
+                        "A resposta da API do Google Gemini não contém scores válidos para todas as competências.");
+            }
             int overallScore = score1 + score2 + score3 + score4 + score5;
 
-            String comment1 = analysis.path("competence1").path("comment")
-                    .asText("Boa demonstração do domínio da norma culta.");
-            String comment2 = analysis.path("competence2").path("comment")
-                    .asText("Excelente compreensão do tema proposto.");
-            String comment3 = analysis.path("competence3").path("comment")
-                    .asText("Argumentação consistente, mas pode ser enriquecida.");
-            String comment4 = analysis.path("competence4").path("comment").asText("Boa articulação entre as ideias.");
-            String comment5 = analysis.path("competence5").path("comment")
-                    .asText("Proposta de intervenção presente, mas precisa ser mais detalhada.");
+            String comment1 = comp1.path("comment").asText();
+            String comment2 = comp2.path("comment").asText();
+            String comment3 = comp3.path("comment").asText();
+            String comment4 = comp4.path("comment").asText();
+            String comment5 = comp5.path("comment").asText();
 
-            String detailed1 = analysis.path("competence1").path("detailed").asText("");
-            String detailed2 = analysis.path("competence2").path("detailed").asText("");
-            String detailed3 = analysis.path("competence3").path("detailed").asText("");
-            String detailed4 = analysis.path("competence4").path("detailed").asText("");
-            String detailed5 = analysis.path("competence5").path("detailed").asText("");
+            if (comment1.isEmpty() || comment2.isEmpty() || comment3.isEmpty() ||
+                    comment4.isEmpty() || comment5.isEmpty()) {
+                log.error("Uma ou mais competências não têm comentário. Resposta: {}", cleanedResponse);
+                throw new BusinessException(
+                        "A resposta da API do Google Gemini não contém comentários para todas as competências.");
+            }
 
-            String lineErrors = analysis.path("competence1").path("lineErrors").asText("") + "\n" +
-                    analysis.path("competence2").path("lineErrors").asText("") + "\n" +
-                    analysis.path("competence3").path("lineErrors").asText("") + "\n" +
-                    analysis.path("competence4").path("lineErrors").asText("") + "\n" +
-                    analysis.path("competence5").path("lineErrors").asText("");
+            String detailed1 = comp1.path("detailed").asText("");
+            String detailed2 = comp2.path("detailed").asText("");
+            String detailed3 = comp3.path("detailed").asText("");
+            String detailed4 = comp4.path("detailed").asText("");
+            String detailed5 = comp5.path("detailed").asText("");
 
-            String generalComment = analysis.path("generalComment")
-                    .asText("Sua redação demonstra um bom domínio da estrutura dissertativa.");
-            String positivePoints = analysis.path("positivePoints")
-                    .asText("Estrutura bem organizada, linguagem adequada.");
-            String suggestions = analysis.path("improvementSuggestions")
-                    .asText("Continue praticando e revisando sua redação.");
+            String lineErrors = comp1.path("lineErrors").asText("") + "\n" +
+                    comp2.path("lineErrors").asText("") + "\n" +
+                    comp3.path("lineErrors").asText("") + "\n" +
+                    comp4.path("lineErrors").asText("") + "\n" +
+                    comp5.path("lineErrors").asText("");
+
+            String generalComment = analysis.path("generalComment").asText();
+
+            JsonNode positivePointsNode = analysis.path("positivePoints");
+            String positivePoints;
+            if (positivePointsNode.isArray()) {
+                StringBuilder sb = new StringBuilder();
+                for (JsonNode item : positivePointsNode) {
+                    if (sb.length() > 0) {
+                        sb.append("\n");
+                    }
+                    sb.append("- ").append(item.asText());
+                }
+                positivePoints = sb.toString();
+            } else {
+                positivePoints = positivePointsNode.asText();
+            }
+
+            JsonNode suggestionsNode = analysis.path("improvementSuggestions");
+            String suggestions;
+            if (suggestionsNode.isArray()) {
+                StringBuilder sb = new StringBuilder();
+                int index = 1;
+                for (JsonNode item : suggestionsNode) {
+                    if (sb.length() > 0) {
+                        sb.append("\n");
+                    }
+                    if (item.isObject()) {
+                        String suggestionText = item.path("suggestion").asText();
+                        if (suggestionText.isEmpty()) {
+                            suggestionText = item.path("text").asText();
+                        }
+                        if (suggestionText.isEmpty()) {
+                            suggestionText = item.toString();
+                        }
+                        sb.append(index).append(". ").append(suggestionText);
+                    } else {
+                        sb.append(index).append(". ").append(item.asText());
+                    }
+                    index++;
+                }
+                suggestions = sb.toString();
+            } else {
+                suggestions = suggestionsNode.asText();
+            }
+
+            if (generalComment.isEmpty() || positivePoints.isEmpty() || suggestions.isEmpty()) {
+                log.error(
+                        "Resposta da API não contém generalComment, positivePoints ou improvementSuggestions válidos. Resposta: {}",
+                        cleanedResponse);
+                throw new BusinessException(
+                        "A resposta da API do Google Gemini não contém todos os campos necessários (generalComment, positivePoints, improvementSuggestions).");
+            }
 
             return Feedback.builder()
                     .essay(essay)
@@ -345,146 +650,14 @@ public class EssayAnalysisServiceImpl implements EssayAnalysisService {
                     .suggestions(suggestions)
                     .build();
 
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Erro ao parsear resposta do Gemini: {}", e.getMessage(), e);
-            log.warn("Usando feedback padrão devido ao erro de parsing");
-            return createDefaultFeedback(essay, webResearchContext);
+            log.error("Resposta recebida que causou erro: {}", aiResponse);
+            throw new BusinessException("Erro ao processar resposta da API do Google Gemini: " + e.getMessage()
+                    + ". A resposta não está no formato JSON esperado.");
         }
-    }
-
-    private Feedback createDefaultFeedback(Essay essay, String webResearchContext) {
-        return Feedback.builder()
-                .essay(essay)
-                .type(Feedback.FeedbackType.AI_GENERATED)
-                .competence1Score(160)
-                .competence2Score(180)
-                .competence3Score(140)
-                .competence4Score(160)
-                .competence5Score(120)
-                .overallScore(760)
-                .competence1Comment("Boa demonstração do domínio da norma culta, com poucos desvios gramaticais.")
-                .competence2Comment("Excelente compreensão do tema proposto.")
-                .competence3Comment("Argumentação consistente, mas pode ser enriquecida com mais repertório.")
-                .competence4Comment("Boa articulação entre as ideias.")
-                .competence5Comment("Proposta de intervenção presente, mas precisa ser mais detalhada.")
-                .competence1Detailed("""
-                        ANÁLISE DETALHADA - Competência 1: Domínio da escrita formal
-
-                        PONTOS FORTES:
-                        - Uso adequado da norma culta na maioria dos trechos
-                        - Concordância verbal e nominal corretas
-                        - Pontuação adequada
-
-                        PONTOS DE ATENÇÃO:
-                        - Linha 3: Verifique a concordância em "...os problemas que afeta..." (deveria ser "afetam")
-                        - Linha 7: "A sociedade precisa de mudanças urgentes" - considere variar a estrutura
-                        - Linha 12: Revisar uso de vírgula antes de "mas"
-
-                        SUGESTÕES DE MELHORIA:
-                        1. Revisar concordâncias, especialmente em orações subordinadas
-                        2. Variar estruturas sintáticas para evitar repetição
-                        3. Atenção especial à pontuação em períodos compostos
-
-                        EXEMPLO DE MELHORIA (baseado em redações nota 1000):
-                        Ao invés de: "Os problemas que afeta a sociedade..."
-                        Use: "Os problemas que afetam a sociedade contemporânea..."
-                        """)
-                .competence2Detailed("""
-                        ANÁLISE DETALHADA - Competência 2: Compreensão e desenvolvimento do tema
-
-                        PONTOS FORTES:
-                        - Tema compreendido corretamente
-                        - Desenvolvimento adequado da problemática
-                        - Contextualização presente
-
-                        PONTOS DE ATENÇÃO:
-                        - Linha 5-8: O desenvolvimento do tema poderia ser mais profundo
-                        - Linha 10: Adicione mais exemplos concretos relacionados ao tema
-                        - Linha 15: Aproveite melhor a pesquisa web realizada sobre o tema
-
-                        SUGESTÕES DE MELHORIA:
-                        1. Aprofundar a análise do tema com dados da pesquisa web
-                        2. Incluir mais exemplos concretos e atualizados
-                        3. Conectar melhor os parágrafos ao tema central
-                        """)
-                .competence3Detailed("""
-                        ANÁLISE DETALHADA - Competência 3: Argumentação e repertório sociocultural
-
-                        PONTOS FORTES:
-                        - Argumentação presente e coerente
-                        - Algum repertório utilizado
-
-                        PONTOS DE ATENÇÃO:
-                        - Linha 6: Falta repertório sociocultural (filósofos, sociólogos, etc.)
-                        - Linha 9: Argumento poderia ser fortalecido com dados da pesquisa web
-                        - Linha 13: Adicione citação de autor relevante ao tema
-
-                        SUGESTÕES DE MELHORIA:
-                        1. Incluir repertório sociocultural (ex: Zygmunt Bauman, Hannah Arendt)
-                        2. Usar dados estatísticos da pesquisa web para fortalecer argumentos
-                        3. Variar tipos de repertório (filosófico, sociológico, histórico)
-                        """)
-                .competence4Detailed("""
-                        ANÁLISE DETALHADA - Competência 4: Coesão e coerência
-
-                        PONTOS FORTES:
-                        - Boa articulação entre parágrafos
-                        - Uso de alguns conectivos
-
-                        PONTOS DE ATENÇÃO:
-                        - Linha 4: Repetição de "portanto" - varie os conectivos
-                        - Linha 8: Transição entre parágrafos pode ser melhorada
-                        - Linha 11: Adicione conectivo para melhorar a coesão
-
-                        SUGESTÕES DE MELHORIA:
-                        1. Variar conectivos: "Ademais", "Outrossim", "Por conseguinte", "Dessa forma"
-                        2. Melhorar transições entre parágrafos
-                        3. Usar pronomes e elipses para evitar repetição
-                        """)
-                .competence5Detailed(
-                        """
-                                ANÁLISE DETALHADA - Competência 5: Proposta de intervenção
-
-                                PONTOS FORTES:
-                                - Proposta presente
-                                - Algum detalhamento
-
-                                PONTOS DE ATENÇÃO:
-                                - Linha 16: Especifique melhor o AGENTE (quem vai fazer?)
-                                - Linha 17: Detalhe o MEIO (como será feito?)
-                                - Linha 18: Explique melhor o EFEITO (qual o resultado esperado?)
-
-                                SUGESTÕES DE MELHORIA:
-                                1. Especificar agente: "Cabe ao Ministério da Educação..."
-                                2. Detalhar meio: "...por meio de campanhas educativas..."
-                                3. Explicar efeito: "...com o objetivo de conscientizar..."
-
-                                EXEMPLO DE MELHORIA (baseado em redações nota 1000):
-                                "Cabe ao Ministério da Educação, em parceria com as escolas, por meio de campanhas educativas e programas de conscientização, promover a discussão sobre o tema, com o objetivo de formar cidadãos mais conscientes e engajados."
-                                """)
-                .lineErrors("""
-                        ERROS E PONTOS DE ATENÇÃO POR LINHA:
-
-                        Linha 3: Erro de concordância - "...os problemas que afeta..." → "...os problemas que afetam..."
-                        Linha 6: Adicionar repertório sociocultural (ex: citação de autor relevante)
-                        Linha 9: Fortalecer argumento com dados da pesquisa web realizada
-                        Linha 12: Melhorar uso de vírgula antes de "mas"
-                        Linha 16: Especificar melhor o agente da proposta de intervenção
-                        Linha 17: Detalhar o meio de execução da proposta
-                        """)
-                .webResearchContext(webResearchContext)
-                .generalComment(
-                        "Sua redação demonstra um bom domínio da estrutura dissertativa. Continue praticando! A análise foi enriquecida com pesquisa web sobre o tema, validando informações e identificando oportunidades de melhoria.")
-                .positivePoints(
-                        "Estrutura bem organizada, linguagem adequada, desenvolvimento coerente do tema, compreensão adequada do tema proposto.")
-                .suggestions("""
-                        1. Enriqueça argumentos com dados da pesquisa web realizada sobre o tema
-                        2. Detalhe a proposta de intervenção especificando agente, ação, meio e efeito
-                        3. Varie conectivos para melhorar a coesão textual
-                        4. Adicione repertório sociocultural (filósofos, sociólogos, pensadores)
-                        5. Revise concordâncias, especialmente em orações subordinadas
-                        """)
-                .build();
     }
 
 }

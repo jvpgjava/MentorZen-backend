@@ -2,11 +2,10 @@ package com.mentorzen.application.service.impl;
 
 import com.mentorzen.application.dto.request.EssayCreateRequest;
 import com.mentorzen.application.dto.response.EssayResponse;
+import com.mentorzen.application.service.AsyncEssayAnalysisService;
 import com.mentorzen.application.service.EssayAnalysisService;
 import com.mentorzen.application.service.EssayService;
-import com.mentorzen.application.service.FeedbackService;
 import com.mentorzen.domain.entity.Essay;
-import com.mentorzen.domain.entity.Feedback;
 import com.mentorzen.domain.entity.User;
 import com.mentorzen.domain.repository.EssayRepository;
 import com.mentorzen.infrastructure.exception.BusinessException;
@@ -15,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,7 +28,7 @@ public class EssayServiceImpl implements EssayService {
 
     private final EssayRepository essayRepository;
     private final EssayAnalysisService analysisService;
-    private final FeedbackService feedbackService;
+    private final AsyncEssayAnalysisService asyncEssayAnalysisService;
 
     @Override
     public EssayResponse createEssay(EssayCreateRequest request, User user) {
@@ -122,7 +120,14 @@ public class EssayServiceImpl implements EssayService {
         essay.setSubmittedAt(LocalDateTime.now());
         Essay submittedEssay = essayRepository.save(essay);
 
-        processAnalysisAsync(submittedEssay.getId());
+        log.info("Redação ID: {} salva com status SUBMITTED. Iniciando processamento assíncrono...", submittedEssay.getId());
+
+        try {
+            asyncEssayAnalysisService.processAnalysisAsync(submittedEssay.getId());
+            log.info("Método assíncrono chamado com sucesso para redação ID: {}", submittedEssay.getId());
+        } catch (Exception e) {
+            log.error("Erro ao chamar método assíncrono para redação ID: {}", submittedEssay.getId(), e);
+        }
 
         return EssayResponse.fromEntity(submittedEssay);
     }
@@ -196,35 +201,6 @@ public class EssayServiceImpl implements EssayService {
         return essayRepository.findById(id)
                 .filter(essay -> essay.getUser().getId().equals(user.getId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Redação não encontrada"));
-    }
-
-    @Async("essayAnalysisExecutor")
-    @Transactional
-    public void processAnalysisAsync(Long essayId) {
-        log.info("Iniciando análise assíncrona da redação ID: {}", essayId);
-
-        try {
-            Essay essay = essayRepository.findById(essayId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Redação não encontrada"));
-
-            Feedback feedback = analysisService.analyzeEssay(essay);
-            feedbackService.saveFeedback(feedback);
-
-            essay.setStatus(Essay.EssayStatus.ANALYZED);
-            essayRepository.save(essay);
-
-            log.info("Redação ID: {} analisada com sucesso", essayId);
-        } catch (Exception e) {
-            log.error("Erro ao analisar redação ID: {} em background", essayId, e);
-            try {
-                Essay essay = essayRepository.findById(essayId).orElse(null);
-                if (essay != null && essay.getStatus() == Essay.EssayStatus.SUBMITTED) {
-                    log.warn("Mantendo redação ID: {} com status SUBMITTED devido ao erro", essayId);
-                }
-            } catch (Exception ex) {
-                log.error("Erro ao verificar status da redação ID: {}", essayId, ex);
-            }
-        }
     }
 
     private Essay.EssayType parseEssayType(String essayType) {
