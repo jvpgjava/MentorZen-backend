@@ -227,7 +227,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/essays?page=0&size=10&sortBy=updatedAt&sortDir=desc",
+							"raw": "{{base_url}}/api/essays?page=0&size=10&sortBy=updatedAt&sortDir=desc&status=&keyword=&date=",
 							"host": [
 								"{{base_url}}"
 							],
@@ -255,10 +255,28 @@
 									"key": "sortDir",
 									"value": "desc",
 									"description": "Direção da ordenação (asc/desc)"
+								},
+								{
+									"key": "status",
+									"value": "",
+									"description": "Filtrar por status (DRAFT, SUBMITTED, ANALYZED, ARCHIVED)",
+									"disabled": true
+								},
+								{
+									"key": "keyword",
+									"value": "",
+									"description": "Palavra-chave para busca no título, tema ou conteúdo",
+									"disabled": true
+								},
+								{
+									"key": "date",
+									"value": "",
+									"description": "Filtrar por data de criação (formato: yyyy-MM-dd, ex: 2025-11-22)",
+									"disabled": true
 								}
 							]
 						},
-						"description": "Lista todas as redações do usuário autenticado com paginação."
+						"description": "Lista todas as redações do usuário autenticado com paginação e filtros opcionais (status, keyword, date)."
 					},
 					"response": []
 				},

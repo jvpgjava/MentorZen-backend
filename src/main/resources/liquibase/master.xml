@@ -8,6 +8,7 @@
     <include file="liquibase/changelogs/001-create-users-table.xml"/>
     <include file="liquibase/changelogs/002-create-essays-table.xml"/>
     <include file="liquibase/changelogs/003-create-feedbacks-table.xml"/>
+    <include file="liquibase/changelogs/009-add-detailed-analysis-fields.xml"/>
     <include file="liquibase/changelogs/004-create-password-reset-tokens-table.xml"/>
     <include file="liquibase/changelogs/005-add-user-profile-fields.xml"/>
     <include file="liquibase/changelogs/006-add-submitted-at-to-essays.xml"/>

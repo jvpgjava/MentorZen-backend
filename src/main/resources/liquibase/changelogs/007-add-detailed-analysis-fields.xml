@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="009-add-detailed-analysis-fields" author="JGrando">
+        <comment>Adicionar campos para análise detalhada das competências e contexto de pesquisa web</comment>
+        
+        <addColumn tableName="feedbacks">
+            <column name="competence_1_detailed" type="TEXT"/>
+            <column name="competence_2_detailed" type="TEXT"/>
+            <column name="competence_3_detailed" type="TEXT"/>
+            <column name="competence_4_detailed" type="TEXT"/>
+            <column name="competence_5_detailed" type="TEXT"/>
+            <column name="line_errors" type="TEXT"/>
+            <column name="web_research_context" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>
+

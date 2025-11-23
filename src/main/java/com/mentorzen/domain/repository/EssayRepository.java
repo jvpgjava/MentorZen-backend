@@ -11,7 +11,6 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface EssayRepository extends JpaRepository<Essay, Long> {
@@ -35,10 +34,28 @@ public interface EssayRepository extends JpaRepository<Essay, Long> {
     @Query("SELECT e FROM Essay e WHERE e.createdAt BETWEEN :startDate AND :endDate")
     List<Essay> findByCreatedAtBetween(@Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
 
-    @Query("SELECT e FROM Essay e WHERE e.title LIKE %:keyword% OR e.theme LIKE %:keyword% OR e.content LIKE %:keyword%")
+    @Query("SELECT e FROM Essay e WHERE LOWER(e.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(e.theme) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(e.content) LIKE LOWER(CONCAT('%', :keyword, '%'))")
     Page<Essay> findByKeyword(@Param("keyword") String keyword, Pageable pageable);
 
-    @Query("SELECT e FROM Essay e WHERE e.user.id = :userId AND (e.title LIKE %:keyword% OR e.theme LIKE %:keyword% OR e.content LIKE %:keyword%)")
+    @Query("SELECT e FROM Essay e WHERE e.user.id = :userId AND (LOWER(e.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(e.theme) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(e.content) LIKE LOWER(CONCAT('%', :keyword, '%')))")
     Page<Essay> findByUserIdAndKeyword(@Param("userId") Long userId, @Param("keyword") String keyword, Pageable pageable);
+
+    @Query("SELECT e FROM Essay e WHERE e.user.id = :userId AND e.status = :status AND (LOWER(e.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(e.theme) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(e.content) LIKE LOWER(CONCAT('%', :keyword, '%')))")
+    Page<Essay> findByUserIdAndStatusAndKeyword(@Param("userId") Long userId, @Param("status") Essay.EssayStatus status, @Param("keyword") String keyword, Pageable pageable);
+
+    @Query("SELECT e FROM Essay e WHERE e.user.id = :userId AND e.status = :status")
+    Page<Essay> findByUserIdAndStatus(@Param("userId") Long userId, @Param("status") Essay.EssayStatus status, Pageable pageable);
+
+    @Query("SELECT e FROM Essay e WHERE e.user.id = :userId AND e.createdAt >= :startDate AND e.createdAt < :endDate")
+    Page<Essay> findByUserIdAndDate(@Param("userId") Long userId, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
+
+    @Query("SELECT e FROM Essay e WHERE e.user.id = :userId AND e.status = :status AND e.createdAt >= :startDate AND e.createdAt < :endDate")
+    Page<Essay> findByUserIdAndStatusAndDate(@Param("userId") Long userId, @Param("status") Essay.EssayStatus status, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
+
+    @Query("SELECT e FROM Essay e WHERE e.user.id = :userId AND (LOWER(e.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(e.theme) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(e.content) LIKE LOWER(CONCAT('%', :keyword, '%'))) AND e.createdAt >= :startDate AND e.createdAt < :endDate")
+    Page<Essay> findByUserIdAndKeywordAndDate(@Param("userId") Long userId, @Param("keyword") String keyword, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
+
+    @Query("SELECT e FROM Essay e WHERE e.user.id = :userId AND e.status = :status AND (LOWER(e.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(e.theme) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(e.content) LIKE LOWER(CONCAT('%', :keyword, '%'))) AND e.createdAt >= :startDate AND e.createdAt < :endDate")
+    Page<Essay> findByUserIdAndStatusAndKeywordAndDate(@Param("userId") Long userId, @Param("status") Essay.EssayStatus status, @Param("keyword") String keyword, @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate, Pageable pageable);
 }
 

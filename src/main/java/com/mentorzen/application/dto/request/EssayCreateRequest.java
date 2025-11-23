@@ -26,5 +26,8 @@ public class EssayCreateRequest {
             example = "A educação digital no Brasil representa um dos maiores desafios contemporâneos...",
             minLength = 150, maxLength = 5000)
     private String content;
+
+    @Schema(description = "Tipo de redação", example = "ARGUMENTATIVE")
+    private String essayType;
 }
 

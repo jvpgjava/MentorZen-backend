@@ -26,5 +26,7 @@ public interface EssayService {
     void deleteEssay(Long id, User user);
 
     Page<EssayResponse> searchEssays(User user, String keyword, Pageable pageable);
+
+    Page<EssayResponse> getUserEssaysWithFilters(User user, Essay.EssayStatus status, String keyword, java.time.LocalDate date, Pageable pageable);
 }
 

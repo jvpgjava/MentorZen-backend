@@ -139,7 +139,7 @@ public class EssayController {
     @GetMapping
     @Operation(
             summary = "Listar redações do usuário",
-            description = "Retorna uma lista paginada das redações do usuário autenticado"
+            description = "Retorna uma lista paginada das redações do usuário autenticado com filtros opcionais"
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Lista de redações retornada com sucesso")
@@ -157,16 +157,34 @@ public class EssayController {
             @RequestParam(defaultValue = "desc")
             @Parameter(description = "Direção da ordenação", example = "desc")
             String sortDir,
+            @RequestParam(required = false)
+            @Parameter(description = "Filtrar por status", example = "DRAFT")
+            Essay.EssayStatus status,
+            @RequestParam(required = false)
+            @Parameter(description = "Palavra-chave para busca no título, tema ou conteúdo", example = "educação")
+            String keyword,
+            @RequestParam(required = false)
+            @Parameter(description = "Filtrar por data de criação (formato: yyyy-MM-dd)", example = "2025-11-22")
+            String date,
             Authentication authentication) {
 
         User user = getCurrentUser(authentication);
-        log.info("Buscando redações do usuário: {} - página: {}", user.getEmail(), page);
+        log.info("Buscando redações do usuário: {} - página: {}, status: {}, keyword: {}, date: {}", user.getEmail(), page, status, keyword, date);
 
         Sort sort = sortDir.equalsIgnoreCase("desc") ?
                 Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<EssayResponse> response = essayService.getUserEssays(user, pageable);
+        java.time.LocalDate filterDate = null;
+        if (date != null && !date.trim().isEmpty()) {
+            try {
+                filterDate = java.time.LocalDate.parse(date);
+            } catch (Exception e) {
+                log.warn("Data inválida fornecida: {}", date);
+            }
+        }
+
+        Page<EssayResponse> response = essayService.getUserEssaysWithFilters(user, status, keyword, filterDate, pageable);
         return ResponseEntity.ok(response);
     }
 

@@ -78,6 +78,27 @@ public class Feedback {
     @Column(name = "positive_points", columnDefinition = "TEXT")
     private String positivePoints;
 
+    @Column(name = "competence_1_detailed", columnDefinition = "TEXT")
+    private String competence1Detailed;
+
+    @Column(name = "competence_2_detailed", columnDefinition = "TEXT")
+    private String competence2Detailed;
+
+    @Column(name = "competence_3_detailed", columnDefinition = "TEXT")
+    private String competence3Detailed;
+
+    @Column(name = "competence_4_detailed", columnDefinition = "TEXT")
+    private String competence4Detailed;
+
+    @Column(name = "competence_5_detailed", columnDefinition = "TEXT")
+    private String competence5Detailed;
+
+    @Column(name = "line_errors", columnDefinition = "TEXT")
+    private String lineErrors;
+
+    @Column(name = "web_research_context", columnDefinition = "TEXT")
+    private String webResearchContext;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private FeedbackType type = FeedbackType.AI_GENERATED;

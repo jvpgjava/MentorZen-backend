@@ -32,6 +32,11 @@ public class Essay {
     @Column(nullable = false, length = 500)
     private String theme;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "essay_type", nullable = false)
+    @Builder.Default
+    private EssayType essayType = EssayType.ARGUMENTATIVE;
+
     @NotBlank(message = "Conteúdo é obrigatório")
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
@@ -85,6 +90,10 @@ public class Essay {
 
     public enum EssayStatus {
         DRAFT, SUBMITTED, ANALYZED, ARCHIVED
+    }
+
+    public enum EssayType {
+        ARGUMENTATIVE, NARRATIVE, DESCRIPTIVE
     }
 }
 

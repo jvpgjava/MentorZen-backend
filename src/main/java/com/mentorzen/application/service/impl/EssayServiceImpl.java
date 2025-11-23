@@ -35,9 +35,12 @@ public class EssayServiceImpl implements EssayService {
     public EssayResponse createEssay(EssayCreateRequest request, User user) {
         log.info("Criando nova redação para usuário ID: {}", user.getId());
 
+        Essay.EssayType essayType = parseEssayType(request.getEssayType());
+        
         Essay essay = Essay.builder()
                 .title(request.getTitle())
                 .theme(request.getTheme())
+                .essayType(essayType)
                 .content(request.getContent())
                 .status(Essay.EssayStatus.DRAFT)
                 .user(user)
@@ -63,6 +66,9 @@ public class EssayServiceImpl implements EssayService {
         essay.setTitle(request.getTitle());
         essay.setTheme(request.getTheme());
         essay.setContent(request.getContent());
+        if (request.getEssayType() != null) {
+            essay.setEssayType(parseEssayType(request.getEssayType()));
+        }
 
         Essay updatedEssay = essayRepository.save(essay);
         log.info("Redação ID: {} atualizada com sucesso", id);
@@ -153,10 +159,59 @@ public class EssayServiceImpl implements EssayService {
         return essays.map(EssayResponse::fromEntity);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<EssayResponse> getUserEssaysWithFilters(User user, Essay.EssayStatus status, String keyword, java.time.LocalDate date, Pageable pageable) {
+        log.info("Buscando redações do usuário ID: {} com filtros - status: {}, keyword: {}, date: {}", user.getId(), status, keyword, date);
+
+        Page<Essay> essays;
+        boolean hasKeyword = keyword != null && !keyword.trim().isEmpty();
+        String searchKeyword = hasKeyword ? keyword.trim() : null;
+        boolean hasDate = date != null;
+        
+        LocalDateTime startDate = null;
+        LocalDateTime endDate = null;
+        if (hasDate) {
+            startDate = date.atStartOfDay();
+            endDate = date.plusDays(1).atStartOfDay();
+        }
+
+        if (status != null && hasKeyword && hasDate) {
+            essays = essayRepository.findByUserIdAndStatusAndKeywordAndDate(user.getId(), status, searchKeyword, startDate, endDate, pageable);
+        } else if (status != null && hasKeyword) {
+            essays = essayRepository.findByUserIdAndStatusAndKeyword(user.getId(), status, searchKeyword, pageable);
+        } else if (status != null && hasDate) {
+            essays = essayRepository.findByUserIdAndStatusAndDate(user.getId(), status, startDate, endDate, pageable);
+        } else if (hasKeyword && hasDate) {
+            essays = essayRepository.findByUserIdAndKeywordAndDate(user.getId(), searchKeyword, startDate, endDate, pageable);
+        } else if (status != null) {
+            essays = essayRepository.findByUserIdAndStatus(user.getId(), status, pageable);
+        } else if (hasKeyword) {
+            essays = essayRepository.findByUserIdAndKeyword(user.getId(), searchKeyword, pageable);
+        } else if (hasDate) {
+            essays = essayRepository.findByUserIdAndDate(user.getId(), startDate, endDate, pageable);
+        } else {
+            essays = essayRepository.findByUser(user, pageable);
+        }
+
+        return essays.map(EssayResponse::fromEntity);
+    }
+
     private Essay findEssayByIdAndUser(Long id, User user) {
         return essayRepository.findById(id)
                 .filter(essay -> essay.getUser().getId().equals(user.getId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Redação não encontrada"));
+    }
+
+    private Essay.EssayType parseEssayType(String essayType) {
+        if (essayType == null || essayType.isEmpty()) {
+            return Essay.EssayType.ARGUMENTATIVE;
+        }
+        try {
+            return Essay.EssayType.valueOf(essayType.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return Essay.EssayType.ARGUMENTATIVE;
+        }
     }
 }
 
