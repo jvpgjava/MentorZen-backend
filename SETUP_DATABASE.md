@@ -15,18 +15,18 @@
 psql -U postgres
 
 -- Criar banco de desenvolvimento
-CREATE DATABASE mentor_zen_dev;
+CREATE DATABASE zen_dev;
 
 -- Criar usuário (opcional)
 CREATE USER mentor_zen_user WITH PASSWORD 'mentor_zen_pass';
-GRANT ALL PRIVILEGES ON DATABASE mentor_zen_dev TO mentor_zen_user;
+GRANT ALL PRIVILEGES ON DATABASE zen_dev TO mentor_zen_user;
 ```
 
 ### 2. Configurar variáveis de ambiente (Desenvolvimento)
 
 ```bash
 # Banco de dados (opcional - se não definidas, usará os valores padrão)
-export DATABASE_URL=jdbc:postgresql://localhost:5432/mentor_zen_dev
+export DATABASE_URL=jdbc:postgresql://localhost:5432/zen_dev
 export DATABASE_USERNAME=postgres
 export DATABASE_PASSWORD=postgres
 
