@@ -8,6 +8,7 @@ import com.mentorzen.application.dto.response.AuthResponse;
 import com.mentorzen.application.dto.response.MessageResponse;
 import com.mentorzen.application.dto.response.UserResponse;
 import com.mentorzen.application.service.AuthService;
+import com.mentorzen.application.service.EmailService;
 import com.mentorzen.application.service.security.JwtService;
 import com.mentorzen.domain.entity.PasswordResetToken;
 import com.mentorzen.domain.entity.User;
@@ -32,6 +33,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final EmailService emailService;
 
     @Override
     @Transactional(readOnly = true)
@@ -93,7 +95,12 @@ public class AuthServiceImpl implements AuthService {
     public MessageResponse forgotPassword(ForgotPasswordRequest request) {
         log.info("Solicitação de recuperação de senha para email: {}", request.getEmail());
 
-        User user = userRepository.findByEmail(request.getEmail()).orElseThrow(() -> new BusinessException("Email não encontrado"));
+        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
+
+        if (user == null) {
+            log.warn("Tentativa de recuperação de senha para email não cadastrado: {}", request.getEmail());
+            return MessageResponse.of("Se o email estiver cadastrado, você receberá um link de recuperação");
+        }
 
         passwordResetTokenRepository.invalidateAllTokensByUser(user);
 
@@ -102,13 +109,21 @@ public class AuthServiceImpl implements AuthService {
                 .token(token)
                 .user(user)
                 .expiresAt(LocalDateTime.now().plusHours(1))
+                .used(false)
                 .build();
 
         passwordResetTokenRepository.save(resetToken);
 
         log.info("Token de recuperação gerado para usuário: {} - Token: {}", user.getEmail(), token);
 
-        return MessageResponse.of("Email de recuperação enviado com sucesso");
+        try {
+            emailService.sendPasswordResetEmail(user.getEmail(), token);
+            log.info("Email de recuperação enviado com sucesso para: {}", user.getEmail());
+        } catch (Exception e) {
+            log.error("Erro ao enviar email de recuperação de senha para: {}", user.getEmail(), e);
+        }
+
+        return MessageResponse.of("Se o email estiver cadastrado, você receberá um link de recuperação");
     }
 
     @Override

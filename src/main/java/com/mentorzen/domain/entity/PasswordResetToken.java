@@ -31,6 +31,7 @@ public class PasswordResetToken {
     private LocalDateTime expiresAt;
 
     @Column(name = "used", nullable = false)
+    @Builder.Default
     private Boolean used = false;
 
     @Column(name = "created_at", nullable = false)
@@ -40,7 +41,10 @@ public class PasswordResetToken {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         if (expiresAt == null) {
-            expiresAt = LocalDateTime.now().plusHours(1); // Token válido por 1 hora
+            expiresAt = LocalDateTime.now().plusHours(1);
+        }
+        if (used == null) {
+            used = false;
         }
     }
 
