@@ -23,6 +23,8 @@ public interface EssayService {
 
     EssayResponse submitEssayForAnalysis(Long id, User user);
 
+    EssayResponse resendEssayForAnalysis(Long id, User user);
+
     void deleteEssay(Long id, User user);
 
     Page<EssayResponse> searchEssays(User user, String keyword, Pageable pageable);

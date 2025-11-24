@@ -208,6 +208,28 @@ public class EssayController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/{id}/resend")
+    @Operation(
+            summary = "Reenviar redação para análise",
+            description = "Reenvia uma redação para nova análise com IA. Permite reprocessar redações que estão em análise (SUBMITTED) ou já analisadas (ANALYZED). Útil quando a análise falhou ou o estudante deseja uma nova avaliação."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Redação reenviada para análise com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Redação não pode ser reenviada (rascunho ou arquivada)"),
+            @ApiResponse(responseCode = "404", description = "Redação não encontrada")
+    })
+    public ResponseEntity<EssayResponse> resendForAnalysis(
+            @PathVariable
+            @Parameter(description = "ID da redação", required = true, example = "1")
+            Long id,
+            Authentication authentication) {
+
+        User user = getCurrentUser(authentication);
+        log.info("Reenviando redação ID: {} para análise - usuário: {}", id, user.getEmail());
+        EssayResponse response = essayService.resendEssayForAnalysis(id, user);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/status/{status}")
     @Operation(
             summary = "Buscar redações por status",
