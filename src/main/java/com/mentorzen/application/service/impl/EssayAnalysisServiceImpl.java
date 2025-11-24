@@ -199,7 +199,8 @@ public class EssayAnalysisServiceImpl implements EssayAnalysisService {
     // Listar modelos de IA
     private String findAvailableModel() {
         try {
-            String listUrl = String.format("https://generativelanguage.googleapis.com/v1beta/models?key=%s", googleApiKey);
+            String listUrl = String.format("https://generativelanguage.googleapis.com/v1beta/models?key=%s",
+                    googleApiKey);
 
             String listResponse = webClient.get()
                     .uri(listUrl)
@@ -286,8 +287,8 @@ public class EssayAnalysisServiceImpl implements EssayAnalysisService {
             String availableModel = findAvailableModel();
 
             if (availableModel == null) {
-                String[] modelsToTry = {"gemini-1.5-flash-002", "gemini-1.5-pro-002", "gemini-1.5-flash-001", "gemini-1.5-pro-001",
-                        "gemini-pro-002", "gemini-pro-001"};
+                String[] modelsToTry = { "gemini-1.5-flash-002", "gemini-1.5-pro-002", "gemini-1.5-flash-001",
+                        "gemini-1.5-pro-001", "gemini-pro-002", "gemini-pro-001" };
 
                 String[] apiVersions = { "v1beta", "v1" };
 
