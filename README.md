@@ -226,16 +226,16 @@ Execute os seguintes comandos SQL:
 
 ```sql
 -- Criar banco de dados de desenvolvimento
-CREATE DATABASE mentor_zen_dev;
+CREATE DATABASE zen_dev;
 
 -- Criar usuário (opcional, mas recomendado)
 CREATE USER mentor_zen_user WITH PASSWORD 'mentor_zen_pass';
 
 -- Conceder privilégios
-GRANT ALL PRIVILEGES ON DATABASE mentor_zen_dev TO mentor_zen_user;
+GRANT ALL PRIVILEGES ON DATABASE zen_dev TO mentor_zen_user;
 
 -- Conectar ao banco criado
-\c mentor_zen_dev
+\c zen_dev
 
 -- Conceder privilégios no schema public
 GRANT ALL ON SCHEMA public TO mentor_zen_user;
@@ -254,7 +254,7 @@ Crie um arquivo `.env` na raiz do projeto backend (opcional, você também pode 
 
 ```bash
 # .env (opcional - para desenvolvimento local)
-DATABASE_URL=jdbc:postgresql://localhost:5432/mentor_zen_dev
+DATABASE_URL=jdbc:postgresql://localhost:5432/zen_dev
 DATABASE_USERNAME=postgres
 DATABASE_PASSWORD=postgres
 JWT_SECRET=sua_chave_jwt_segura_para_desenvolvimento
@@ -262,13 +262,11 @@ GOOGLE_AI_API_KEY=sua_api_key_do_google
 GOOGLE_AI_PROJECT_ID=seu_project_id_do_google
 ```
 
-**Importante**: O arquivo `.env` não deve ser commitado no Git. Ele já está no `.gitignore`.
-
 Alternativamente, você pode exportar as variáveis diretamente no terminal:
 
 **Windows (PowerShell):**
 ```powershell
-$env:DATABASE_URL="jdbc:postgresql://localhost:5432/mentor_zen_dev"
+$env:DATABASE_URL="jdbc:postgresql://localhost:5432/zen_dev"
 $env:DATABASE_USERNAME="postgres"
 $env:DATABASE_PASSWORD="postgres"
 $env:JWT_SECRET="sua_chave_jwt_segura_para_desenvolvimento"
@@ -276,7 +274,7 @@ $env:JWT_SECRET="sua_chave_jwt_segura_para_desenvolvimento"
 
 **Linux/Mac:**
 ```bash
-export DATABASE_URL=jdbc:postgresql://localhost:5432/mentor_zen_dev
+export DATABASE_URL=jdbc:postgresql://localhost:5432/zen_dev
 export DATABASE_USERNAME=postgres
 export DATABASE_PASSWORD=postgres
 export JWT_SECRET=sua_chave_jwt_segura_para_desenvolvimento
