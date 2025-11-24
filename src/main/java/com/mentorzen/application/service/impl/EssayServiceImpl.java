@@ -133,6 +133,40 @@ public class EssayServiceImpl implements EssayService {
     }
 
     @Override
+    public EssayResponse resendEssayForAnalysis(Long id, User user) {
+        log.info("Reenviando redação ID: {} para análise", id);
+
+        Essay essay = findEssayByIdAndUser(id, user);
+
+        if (essay.getStatus() == Essay.EssayStatus.DRAFT) {
+            throw new BusinessException("Redações em rascunho devem usar o endpoint de submissão inicial");
+        }
+
+        if (essay.getStatus() == Essay.EssayStatus.ARCHIVED) {
+            throw new BusinessException("Redações arquivadas não podem ser reenviadas para análise");
+        }
+
+        if (!analysisService.validateEnemCriteria(essay)) {
+            throw new BusinessException("A redação não atende aos critérios básicos do ENEM");
+        }
+
+        essay.setStatus(Essay.EssayStatus.SUBMITTED);
+        essay.setSubmittedAt(LocalDateTime.now());
+        Essay resubmittedEssay = essayRepository.save(essay);
+
+        log.info("Redação ID: {} salva com status SUBMITTED para reprocessamento. Iniciando processamento assíncrono...", resubmittedEssay.getId());
+
+        try {
+            asyncEssayAnalysisService.processAnalysisAsync(resubmittedEssay.getId());
+            log.info("Método assíncrono chamado com sucesso para reprocessamento da redação ID: {}", resubmittedEssay.getId());
+        } catch (Exception e) {
+            log.error("Erro ao chamar método assíncrono para reprocessamento da redação ID: {}", resubmittedEssay.getId(), e);
+        }
+
+        return EssayResponse.fromEntity(resubmittedEssay);
+    }
+
+    @Override
     public void deleteEssay(Long id, User user) {
         log.info("Deletando redação ID: {} do usuário ID: {}", id, user.getId());
 
