@@ -1,6 +1,8 @@
 package com.mentorzen.presentation.controller;
 
 import com.mentorzen.application.dto.request.ForgotPasswordRequest;
+import com.mentorzen.application.dto.request.GoogleLoginRequest;
+import com.mentorzen.application.dto.request.GoogleRegisterRequest;
 import com.mentorzen.application.dto.request.LoginRequest;
 import com.mentorzen.application.dto.request.RegisterRequest;
 import com.mentorzen.application.dto.request.ResetPasswordRequest;
@@ -36,6 +38,30 @@ public class AuthController {
     })
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/google/login")
+    @Operation(summary = "Login com Google", description = "Autentica um usuário usando token do Google. Retorna erro se o usuário não existir")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Login realizado com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Token do Google inválido ou usuário não encontrado"),
+            @ApiResponse(responseCode = "422", description = "Dados de entrada inválidos")
+    })
+    public ResponseEntity<AuthResponse> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request) {
+        AuthResponse response = authService.loginWithGoogle(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/google/register")
+    @Operation(summary = "Registro com Google", description = "Registra um novo usuário usando token do Google e informações adicionais")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Registro realizado com sucesso"),
+            @ApiResponse(responseCode = "400", description = "Token do Google inválido ou email já cadastrado"),
+            @ApiResponse(responseCode = "422", description = "Dados de entrada inválidos")
+    })
+    public ResponseEntity<AuthResponse> registerWithGoogle(@Valid @RequestBody GoogleRegisterRequest request) {
+        AuthResponse response = authService.registerWithGoogle(request);
         return ResponseEntity.ok(response);
     }
 

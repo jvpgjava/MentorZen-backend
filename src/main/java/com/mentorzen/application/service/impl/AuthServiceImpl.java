@@ -1,6 +1,9 @@
 package com.mentorzen.application.service.impl;
 
+import com.google.auth.oauth2.TokenVerifier;
 import com.mentorzen.application.dto.request.ForgotPasswordRequest;
+import com.mentorzen.application.dto.request.GoogleLoginRequest;
+import com.mentorzen.application.dto.request.GoogleRegisterRequest;
 import com.mentorzen.application.dto.request.LoginRequest;
 import com.mentorzen.application.dto.request.RegisterRequest;
 import com.mentorzen.application.dto.request.ResetPasswordRequest;
@@ -17,6 +20,7 @@ import com.mentorzen.domain.repository.UserRepository;
 import com.mentorzen.infrastructure.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +38,9 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final EmailService emailService;
+
+    @Value("${app.google.client-id:}")
+    private String googleClientId;
 
     @Override
     @Transactional(readOnly = true)
@@ -57,6 +64,123 @@ public class AuthServiceImpl implements AuthService {
                 .token(token)
                 .user(userResponse)
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AuthResponse loginWithGoogle(GoogleLoginRequest request) {
+        log.info("Tentativa de login com Google");
+
+        try {
+            if (googleClientId == null || googleClientId.isEmpty()) {
+                throw new BusinessException("Google Client ID não configurado");
+            }
+
+            TokenVerifier verifier = TokenVerifier.newBuilder()
+                    .setAudience(googleClientId)
+                    .setIssuer("https://accounts.google.com")
+                    .build();
+
+            var token = verifier.verify(request.getToken());
+            var payload = token.getPayload();
+            String email = (String) payload.get("email");
+            String name = (String) payload.get("name");
+            String picture = (String) payload.get("picture");
+
+            if (email == null || email.isEmpty()) {
+                throw new BusinessException("Email não encontrado no token do Google");
+            }
+
+            User user = userRepository.findByEmail(email).orElseThrow(() -> new BusinessException("Usuário não encontrado. Por favor, crie uma conta primeiro."));
+
+            log.info("Login com Google para usuário existente: {}", email);
+
+            if ((user.getName() == null || user.getName().isEmpty()) && name != null && !name.isEmpty()) {
+                user.setName(name);
+            }
+
+            boolean needsUpdate = false;
+            if (picture != null && !picture.isEmpty()) {
+                if (user.getProfilePictureUrl() == null || !picture.equals(user.getProfilePictureUrl())) {
+                    user.setProfilePictureUrl(picture);
+                    needsUpdate = true;
+                }
+            }
+
+            if (needsUpdate || (user.getName() == null || user.getName().isEmpty())) {
+                userRepository.save(user);
+            }
+
+            String jwtToken = jwtService.encode(user);
+            UserResponse userResponse = mapToUserResponse(user);
+
+            log.info("Login realizado com sucesso via Google para: {}", email);
+
+            return AuthResponse.builder().token(jwtToken).user(userResponse).build();
+
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Erro ao fazer login com Google", e);
+            throw new BusinessException("Token do Google inválido ou expirado");
+        }
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse registerWithGoogle(GoogleRegisterRequest request) {
+        log.info("Tentativa de registro com Google");
+
+        try {
+            if (googleClientId == null || googleClientId.isEmpty()) {
+                throw new BusinessException("Google Client ID não configurado");
+            }
+
+            TokenVerifier verifier = TokenVerifier.newBuilder()
+                    .setAudience(googleClientId)
+                    .setIssuer("https://accounts.google.com")
+                    .build();
+
+            var token = verifier.verify(request.getToken());
+            var payload = token.getPayload();
+            String email = (String) payload.get("email");
+            String name = (String) payload.get("name");
+            String picture = (String) payload.get("picture");
+
+            if (email == null || email.isEmpty()) {
+                throw new BusinessException("Email não encontrado no token do Google");
+            }
+
+            if (userRepository.existsByEmail(email)) {
+                throw new BusinessException("Email já está cadastrado. Faça login em vez de criar uma nova conta.");
+            }
+
+            log.info("Registrando novo usuário via Google: {}", email);
+            User user = User.builder().name(name != null && !name.isEmpty() ? name : email.split("@")[0])
+                    .email(email)
+                    .password(passwordEncoder.encode(UUID.randomUUID().toString()))
+                    .role(User.UserRole.STUDENT)
+                    .schoolGrade(request.getSchoolGrade())
+                    .studyGoals(request.getStudyGoals())
+                    .profilePictureUrl(picture)
+                    .build();
+            user = userRepository.save(user);
+            log.info("Usuário registrado com sucesso via Google: {}", email);
+
+            String jwtToken = jwtService.encode(user);
+            UserResponse userResponse = mapToUserResponse(user);
+
+            return AuthResponse.builder()
+                    .token(jwtToken)
+                    .user(userResponse)
+                    .build();
+
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Erro ao fazer registro com Google", e);
+            throw new BusinessException("Token do Google inválido ou expirado");
+        }
     }
 
     @Override

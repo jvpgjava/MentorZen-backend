@@ -32,6 +32,8 @@ public class SecurityConfig {
             "/swagger-ui/**",
             "/api/auth/login",
             "/api/auth/register",
+            "/api/auth/google/login",
+            "/api/auth/google/register",
             "/api/auth/forgot-password",
             "/api/auth/reset-password",
             "/actuator/health",
@@ -59,9 +61,8 @@ public class SecurityConfig {
         if (jwtSecret == null || jwtSecret.length() < 32) {
             throw new IllegalStateException(
                     "JWT secret must be at least 32 characters (256 bits) long. " +
-                    "Current length: " + (jwtSecret != null ? jwtSecret.length() : 0) + ". " +
-                    "Please set JWT_SECRET environment variable with a secure secret."
-            );
+                            "Current length: " + (jwtSecret != null ? jwtSecret.length() : 0) + ". " +
+                            "Please set JWT_SECRET environment variable with a secure secret.");
         }
     }
 
