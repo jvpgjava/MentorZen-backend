@@ -89,7 +89,7 @@ public class Essay {
     }
 
     public enum EssayStatus {
-        DRAFT, SUBMITTED, ANALYZED, ARCHIVED
+        DRAFT, SUBMITTED, ANALYZED, WAITING_FOR_ANALYSIS
     }
 
     public enum EssayType {

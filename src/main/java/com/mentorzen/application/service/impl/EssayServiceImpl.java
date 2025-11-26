@@ -143,8 +143,8 @@ public class EssayServiceImpl implements EssayService {
             throw new BusinessException("Redações em rascunho devem usar o endpoint de submissão inicial");
         }
 
-        if (essay.getStatus() == Essay.EssayStatus.ARCHIVED) {
-            throw new BusinessException("Redações arquivadas não podem ser reenviadas para análise");
+        if (essay.getStatus() != Essay.EssayStatus.WAITING_FOR_ANALYSIS) {
+            throw new BusinessException("Apenas redações com status WAITING_FOR_ANALYSIS podem ser reenviadas para análise");
         }
 
         if (!analysisService.validateEnemCriteria(essay)) {

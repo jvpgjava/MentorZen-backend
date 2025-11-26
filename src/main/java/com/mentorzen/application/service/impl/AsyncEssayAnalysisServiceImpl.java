@@ -32,10 +32,12 @@ public class AsyncEssayAnalysisServiceImpl implements AsyncEssayAnalysisService 
             try {
                 Essay essay = essayRepository.findById(essayId).orElse(null);
                 if (essay != null && essay.getStatus() == Essay.EssayStatus.SUBMITTED) {
-                    log.warn("Mantendo redação ID: {} com status SUBMITTED devido ao erro: {}", essayId, e.getMessage());
+                    essay.setStatus(Essay.EssayStatus.WAITING_FOR_ANALYSIS);
+                    essayRepository.save(essay);
+                    log.warn("Redação ID: {} atualizada para status WAITING_FOR_ANALYSIS devido ao erro na API Gemini: {}", essayId, e.getMessage());
                 }
             } catch (Exception ex) {
-                log.error("Erro ao verificar status da redação ID: {}", essayId, ex);
+                log.error("Erro ao atualizar status da redação ID: {} para WAITING_FOR_ANALYSIS", essayId, ex);
             }
         }
     }
