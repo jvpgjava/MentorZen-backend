@@ -91,7 +91,8 @@ public class AuthServiceImpl implements AuthService {
                 throw new BusinessException("Email não encontrado no token do Google");
             }
 
-            User user = userRepository.findByEmail(email).orElseThrow(() -> new BusinessException("Usuário não encontrado. Por favor, crie uma conta primeiro."));
+            User user = userRepository.findByEmail(email).orElseThrow(
+                    () -> new BusinessException("Usuário não encontrado. Por favor, crie uma conta primeiro."));
 
             log.info("Login com Google para usuário existente: {}", email);
 
