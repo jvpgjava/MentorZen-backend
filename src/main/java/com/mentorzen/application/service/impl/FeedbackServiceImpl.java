@@ -10,9 +10,12 @@ import com.mentorzen.domain.repository.FeedbackRepository;
 import com.mentorzen.infrastructure.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -87,5 +90,46 @@ public class FeedbackServiceImpl implements FeedbackService {
 
         return feedbackRepository.countByUserId(user.getId());
     }
-}
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<FeedbackResponse> getUserFeedbacksWithFilters(User user, Feedback.FeedbackType type, String keyword,
+            java.time.LocalDate date, Pageable pageable) {
+        log.info("Buscando feedbacks do usuário ID: {} com filtros - type: {}, keyword: {}, date: {}",
+                user.getId(), type, keyword, date);
+
+        Page<Feedback> feedbacks;
+        boolean hasKeyword = keyword != null && !keyword.trim().isEmpty();
+        String searchKeyword = hasKeyword ? keyword.trim() : null;
+        boolean hasDate = date != null;
+
+        LocalDateTime startDate = null;
+        LocalDateTime endDate = null;
+        if (hasDate) {
+            startDate = date.atStartOfDay();
+            endDate = date.plusDays(1).atStartOfDay();
+        }
+
+        if (type != null && hasKeyword && hasDate) {
+            feedbacks = feedbackRepository.findByUserIdAndTypeAndKeywordAndDate(user.getId(), type, searchKeyword,
+                    startDate, endDate, pageable);
+        } else if (type != null && hasKeyword) {
+            feedbacks = feedbackRepository.findByUserIdAndTypeAndKeyword(user.getId(), type, searchKeyword, pageable);
+        } else if (type != null && hasDate) {
+            feedbacks = feedbackRepository.findByUserIdAndTypeAndDate(user.getId(), type, startDate, endDate, pageable);
+        } else if (hasKeyword && hasDate) {
+            feedbacks = feedbackRepository.findByUserIdAndKeywordAndDate(user.getId(), searchKeyword, startDate,
+                    endDate, pageable);
+        } else if (type != null) {
+            feedbacks = feedbackRepository.findByUserIdAndType(user.getId(), type, pageable);
+        } else if (hasKeyword) {
+            feedbacks = feedbackRepository.findByUserIdAndKeyword(user.getId(), searchKeyword, pageable);
+        } else if (hasDate) {
+            feedbacks = feedbackRepository.findByUserIdAndDate(user.getId(), startDate, endDate, pageable);
+        } else {
+            feedbacks = feedbackRepository.findByUserId(user.getId(), pageable);
+        }
+
+        return feedbacks.map(FeedbackResponse::fromEntity);
+    }
+}

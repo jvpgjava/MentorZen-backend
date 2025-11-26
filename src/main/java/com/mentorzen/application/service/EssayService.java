@@ -29,6 +29,9 @@ public interface EssayService {
 
     Page<EssayResponse> searchEssays(User user, String keyword, Pageable pageable);
 
-    Page<EssayResponse> getUserEssaysWithFilters(User user, Essay.EssayStatus status, String keyword, java.time.LocalDate date, Pageable pageable);
-}
+    Page<EssayResponse> getUserEssaysWithFilters(User user, Essay.EssayStatus status, String keyword,
+            java.time.LocalDate date, Pageable pageable);
 
+    Page<EssayResponse> getUserEssaysByStatusWithFilters(User user, Essay.EssayStatus status, String keyword,
+            java.time.LocalDate date, Pageable pageable);
+}

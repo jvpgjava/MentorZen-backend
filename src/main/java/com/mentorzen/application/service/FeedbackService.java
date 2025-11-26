@@ -4,6 +4,8 @@ import com.mentorzen.application.dto.response.FeedbackResponse;
 import com.mentorzen.domain.entity.Essay;
 import com.mentorzen.domain.entity.Feedback;
 import com.mentorzen.domain.entity.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -17,8 +19,10 @@ public interface FeedbackService {
 
     List<FeedbackResponse> getUserFeedbacks(User user);
 
+    Page<FeedbackResponse> getUserFeedbacksWithFilters(User user, Feedback.FeedbackType type, String keyword,
+            java.time.LocalDate date, Pageable pageable);
+
     Double getUserAverageScore(User user);
 
     Long getUserFeedbackCount(User user);
 }
-

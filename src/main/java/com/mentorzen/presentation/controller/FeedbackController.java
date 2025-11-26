@@ -75,7 +75,7 @@ public class FeedbackController {
         }
 
         @GetMapping("/user")
-        @Operation(summary = "Listar todos os feedbacks do usuário", description = "Retorna todos os feedbacks recebidos pelo usuário autenticado, ordenados por data")
+        @Operation(summary = "Listar todos os feedbacks do usuário", description = "Retorna todos os feedbacks recebidos pelo usuário autenticado, ordenados por data (método legado, use /feedbacks/user/filtered com paginação)")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "Lista de feedbacks do usuário")
         })
@@ -85,6 +85,45 @@ public class FeedbackController {
                 User user = getCurrentUser(authentication);
                 log.info("Buscando todos os feedbacks do usuário: {}", user.getEmail());
                 List<FeedbackResponse> response = feedbackService.getUserFeedbacks(user);
+                return ResponseEntity.ok(response);
+        }
+
+        @GetMapping("/user/filtered")
+        @Operation(summary = "Listar feedbacks do usuário com filtros e paginação", description = "Retorna uma lista paginada dos feedbacks recebidos pelo usuário autenticado com filtros opcionais")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "Lista paginada de feedbacks do usuário")
+        })
+        public ResponseEntity<org.springframework.data.domain.Page<FeedbackResponse>> getUserFeedbacksWithFilters(
+                        @RequestParam(defaultValue = "0") @Parameter(description = "Número da página (0-indexed)", example = "0") int page,
+                        @RequestParam(defaultValue = "10") @Parameter(description = "Tamanho da página", example = "10") int size,
+                        @RequestParam(defaultValue = "createdAt") @Parameter(description = "Campo para ordenação", example = "createdAt") String sortBy,
+                        @RequestParam(defaultValue = "desc") @Parameter(description = "Direção da ordenação", example = "desc") String sortDir,
+                        @RequestParam(required = false) @Parameter(description = "Filtrar por tipo de feedback", example = "AI_GENERATED") com.mentorzen.domain.entity.Feedback.FeedbackType type,
+                        @RequestParam(required = false) @Parameter(description = "Palavra-chave para busca no título da redação ou comentário", example = "educação") String keyword,
+                        @RequestParam(required = false) @Parameter(description = "Filtrar por data de criação (formato: yyyy-MM-dd)", example = "2025-11-22") String date,
+                        Authentication authentication) {
+
+                User user = getCurrentUser(authentication);
+                log.info("Buscando feedbacks do usuário: {} - página: {}, type: {}, keyword: {}, date: {}",
+                                user.getEmail(), page, type, keyword, date);
+
+                org.springframework.data.domain.Sort sort = sortDir.equalsIgnoreCase("desc")
+                                ? org.springframework.data.domain.Sort.by(sortBy).descending()
+                                : org.springframework.data.domain.Sort.by(sortBy).ascending();
+                org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page,
+                                size, sort);
+
+                java.time.LocalDate filterDate = null;
+                if (date != null && !date.trim().isEmpty()) {
+                        try {
+                                filterDate = java.time.LocalDate.parse(date);
+                        } catch (Exception e) {
+                                log.warn("Data inválida fornecida: {}", date);
+                        }
+                }
+
+                org.springframework.data.domain.Page<FeedbackResponse> response = feedbackService
+                                .getUserFeedbacksWithFilters(user, type, keyword, filterDate, pageable);
                 return ResponseEntity.ok(response);
         }
 

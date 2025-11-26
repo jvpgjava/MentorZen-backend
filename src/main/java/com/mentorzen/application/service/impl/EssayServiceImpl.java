@@ -120,7 +120,8 @@ public class EssayServiceImpl implements EssayService {
         essay.setSubmittedAt(LocalDateTime.now());
         Essay submittedEssay = essayRepository.save(essay);
 
-        log.info("Redação ID: {} salva com status SUBMITTED. Iniciando processamento assíncrono...", submittedEssay.getId());
+        log.info("Redação ID: {} salva com status SUBMITTED. Iniciando processamento assíncrono...",
+                submittedEssay.getId());
 
         try {
             asyncEssayAnalysisService.processAnalysisAsync(submittedEssay.getId());
@@ -154,13 +155,17 @@ public class EssayServiceImpl implements EssayService {
         essay.setSubmittedAt(LocalDateTime.now());
         Essay resubmittedEssay = essayRepository.save(essay);
 
-        log.info("Redação ID: {} salva com status SUBMITTED para reprocessamento. Iniciando processamento assíncrono...", resubmittedEssay.getId());
+        log.info(
+                "Redação ID: {} salva com status SUBMITTED para reprocessamento. Iniciando processamento assíncrono...",
+                resubmittedEssay.getId());
 
         try {
             asyncEssayAnalysisService.processAnalysisAsync(resubmittedEssay.getId());
-            log.info("Método assíncrono chamado com sucesso para reprocessamento da redação ID: {}", resubmittedEssay.getId());
+            log.info("Método assíncrono chamado com sucesso para reprocessamento da redação ID: {}",
+                    resubmittedEssay.getId());
         } catch (Exception e) {
-            log.error("Erro ao chamar método assíncrono para reprocessamento da redação ID: {}", resubmittedEssay.getId(), e);
+            log.error("Erro ao chamar método assíncrono para reprocessamento da redação ID: {}",
+                    resubmittedEssay.getId(), e);
         }
 
         return EssayResponse.fromEntity(resubmittedEssay);
@@ -226,6 +231,39 @@ public class EssayServiceImpl implements EssayService {
             essays = essayRepository.findByUserIdAndDate(user.getId(), startDate, endDate, pageable);
         } else {
             essays = essayRepository.findByUser(user, pageable);
+        }
+
+        return essays.map(EssayResponse::fromEntity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<EssayResponse> getUserEssaysByStatusWithFilters(User user, Essay.EssayStatus status, String keyword,
+            java.time.LocalDate date, Pageable pageable) {
+        log.info("Buscando redações do usuário ID: {} com status: {} e filtros - keyword: {}, date: {}",
+                user.getId(), status, keyword, date);
+
+        Page<Essay> essays;
+        boolean hasKeyword = keyword != null && !keyword.trim().isEmpty();
+        String searchKeyword = hasKeyword ? keyword.trim() : null;
+        boolean hasDate = date != null;
+
+        LocalDateTime startDate = null;
+        LocalDateTime endDate = null;
+        if (hasDate) {
+            startDate = date.atStartOfDay();
+            endDate = date.plusDays(1).atStartOfDay();
+        }
+
+        if (hasKeyword && hasDate) {
+            essays = essayRepository.findByUserIdAndStatusAndKeywordAndDate(user.getId(), status, searchKeyword,
+                    startDate, endDate, pageable);
+        } else if (hasKeyword) {
+            essays = essayRepository.findByUserIdAndStatusAndKeyword(user.getId(), status, searchKeyword, pageable);
+        } else if (hasDate) {
+            essays = essayRepository.findByUserIdAndStatusAndDate(user.getId(), status, startDate, endDate, pageable);
+        } else {
+            essays = essayRepository.findByUserIdAndStatus(user.getId(), status, pageable);
         }
 
         return essays.map(EssayResponse::fromEntity);
