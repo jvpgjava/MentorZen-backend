@@ -2,33 +2,29 @@ package com.mentorzen.application.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.genai.Client;
+import com.google.genai.types.GenerateContentConfig;
+import com.google.genai.types.GenerateContentResponse;
 import com.mentorzen.application.service.EssayAnalysisService;
 import com.mentorzen.domain.entity.Essay;
 import com.mentorzen.domain.entity.Feedback;
 import com.mentorzen.infrastructure.exception.BusinessException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class EssayAnalysisServiceImpl implements EssayAnalysisService {
 
-    private final WebClient webClient;
-
     @Value("${google.ai.api-key:}")
-    private String googleApiKey;
+    private String apiKey;
+
+    @Value("${google.ai.model:gemini-2.0-flash-lite}")
+    private String modelName;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private Client client;
 
     @Override
     public Feedback analyzeEssay(Essay essay) {
@@ -196,300 +192,51 @@ public class EssayAnalysisServiceImpl implements EssayAnalysisService {
                 essay.getTheme(), essay.getContent());
     }
 
-    // Listar modelos de IA
-    private String findAvailableModel() {
-        try {
-            String listUrl = String.format("https://generativelanguage.googleapis.com/v1beta/models?key=%s",
-                    googleApiKey);
-
-            String listResponse = webClient.get()
-                    .uri(listUrl)
-                    .retrieve()
-                    .bodyToMono(String.class)
-                    .timeout(Duration.ofSeconds(10))
-                    .block();
-
-            if (listResponse != null) {
-                JsonNode jsonNode = objectMapper.readTree(listResponse);
-                JsonNode models = jsonNode.path("models");
-
-                List<String> preferredModels = Arrays.asList(
-                        "gemini-1.5-flash",
-                        "gemini-1.5-pro",
-                        "gemini-pro");
-
-                if (models.isArray()) {
-                    for (String preferred : preferredModels) {
-                        for (JsonNode model : models) {
-                            String modelName = model.path("name").asText();
-                            if (modelName.startsWith("models/")) {
-                                modelName = modelName.substring(7);
-                            }
-
-                            if (modelName.contains("preview") || modelName.contains("exp") ||
-                                    modelName.contains("experimental") || modelName.contains("2.5")) {
-                                continue;
-                            }
-
-                            if (modelName.equals(preferred) || modelName.startsWith(preferred + "-")) {
-                                JsonNode supportedMethods = model.path("supportedGenerationMethods");
-                                if (supportedMethods.isArray()) {
-                                    for (JsonNode method : supportedMethods) {
-                                        if ("generateContent".equals(method.asText())) {
-                                            log.info("✅ Modelo preferido encontrado: {}", modelName);
-                                            return modelName;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    for (JsonNode model : models) {
-                        String modelName = model.path("name").asText();
-                        if (modelName.startsWith("models/")) {
-                            modelName = modelName.substring(7);
-                        }
-
-                        if (modelName.contains("preview") || modelName.contains("exp") ||
-                                modelName.contains("experimental") || modelName.contains("2.5")) {
-                            continue;
-                        }
-
-                        JsonNode supportedMethods = model.path("supportedGenerationMethods");
-                        if (supportedMethods.isArray()) {
-                            for (JsonNode method : supportedMethods) {
-                                if ("generateContent".equals(method.asText())) {
-                                    return modelName;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.debug("Não foi possível listar modelos disponíveis: {}", e.getMessage());
+    private Client getClient() {
+        if (client == null) {
+            validateApiKey();
+            client = Client.builder().apiKey(apiKey).build();
+            log.info("Client do Google Gemini inicializado com sucesso");
         }
-        return null;
+        return client;
+    }
+
+    private void validateApiKey() {
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            log.error("API Key do Google Gemini não configurada");
+            throw new BusinessException(
+                    "API Key do Google Gemini não está configurada. Configure a propriedade 'google.ai.api-key'.");
+        }
     }
 
     private String callGeminiAPI(String prompt) {
-        if (googleApiKey == null || googleApiKey.isEmpty() || googleApiKey.trim().isEmpty()) {
-            log.error(
-                    "API do Google Gemini não configurada. Configure a propriedade 'google.ai.api-key' no arquivo de propriedades.");
-            throw new BusinessException(
-                    "API do Google Gemini não está configurada. Por favor, configure a chave da API nas propriedades da aplicação.");
-        }
-
         try {
-            log.info("Chamando API do Gemini com prompt de {} caracteres", prompt.length());
+            log.info("Chamando API do Gemini com prompt de {} caracteres usando modelo: {}",
+                    prompt.length(), modelName);
 
-            String availableModel = findAvailableModel();
+            GenerateContentConfig config = GenerateContentConfig.builder()
+                    .temperature(0.7f)
+                    .topK(40f)
+                    .topP(0.95f)
+                    .maxOutputTokens(8192)
+                    .build();
 
-            if (availableModel == null) {
-                String[] modelsToTry = { "gemini-1.5-flash-002", "gemini-1.5-pro-002", "gemini-1.5-flash-001",
-                        "gemini-1.5-pro-001", "gemini-pro-002", "gemini-pro-001" };
+            GenerateContentResponse response = getClient().models.generateContent(
+                    modelName,
+                    prompt,
+                    config
+            );
 
-                String[] apiVersions = { "v1beta", "v1" };
-
-                for (String apiVersion : apiVersions) {
-                    for (String model : modelsToTry) {
-                        try {
-                            String testUrl = String.format(
-                                    "https://generativelanguage.googleapis.com/%s/models/%s:generateContent?key=%s",
-                                    apiVersion, model, googleApiKey);
-
-                            Map<String, Object> testBody = new HashMap<>();
-                            Map<String, Object> testContent = new HashMap<>();
-                            Map<String, Object> testPart = new HashMap<>();
-                            testPart.put("text", "test");
-                            testContent.put("parts", java.util.Arrays.asList(testPart));
-                            testBody.put("contents", java.util.Arrays.asList(testContent));
-
-                            String testResponse = webClient.post()
-                                    .uri(testUrl)
-                                    .header("Content-Type", "application/json")
-                                    .bodyValue(testBody)
-                                    .retrieve()
-                                    .onStatus(status -> status.is4xxClientError(),
-                                            clientResponse -> Mono.error(new RuntimeException("Not available")))
-                                    .bodyToMono(String.class)
-                                    .timeout(Duration.ofSeconds(5))
-                                    .block();
-
-                            if (testResponse != null) {
-                                availableModel = model;
-                                break;
-                            }
-                        } catch (Exception e) {
-                            continue;
-                        }
-                    }
-                    if (availableModel != null)
-                        break;
-                }
+            if (response == null) {
+                throw new BusinessException("A API do Google Gemini retornou uma resposta nula.");
             }
 
-            if (availableModel == null) {
-                throw new BusinessException(
-                        "Nenhum modelo do Google Gemini está disponível. Verifique se a API Generative Language está ativada no Google Cloud Console.");
-            }
-
-            String apiVersion = "v1beta";
-
-            Map<String, Object> requestBody = new HashMap<>();
-            Map<String, Object> content = new HashMap<>();
-            Map<String, Object> part = new HashMap<>();
-            part.put("text", prompt);
-            content.put("parts", java.util.Arrays.asList(part));
-            requestBody.put("contents", java.util.Arrays.asList(content));
-
-            Map<String, Object> generationConfig = new HashMap<>();
-            generationConfig.put("temperature", 0.7);
-            generationConfig.put("topK", 40);
-            generationConfig.put("topP", 0.95);
-            generationConfig.put("maxOutputTokens", 8192);
-            requestBody.put("generationConfig", generationConfig);
-
-            try {
-                String requestBodyJson = objectMapper.writeValueAsString(requestBody);
-                log.debug("Request body para Gemini: {}", requestBodyJson);
-            } catch (Exception e) {
-                log.warn("Não foi possível serializar request body para log", e);
-            }
-
-            String url = String.format(
-                    "https://generativelanguage.googleapis.com/%s/models/%s:generateContent?key=%s",
-                    apiVersion, availableModel, googleApiKey);
-
-            log.info("Usando modelo: {} na versão {}", availableModel, apiVersion);
-
-            String response = null;
-            int maxRetries = 3;
-            int retryCount = 0;
-
-            while (retryCount < maxRetries) {
-                try {
-                    response = webClient.post()
-                            .uri(url)
-                            .header("Content-Type", "application/json")
-                            .bodyValue(requestBody)
-                            .retrieve()
-                            .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(),
-                                    clientResponse -> {
-                                        return clientResponse.bodyToMono(String.class)
-                                                .flatMap(errorBody -> {
-                                                    if (clientResponse.statusCode().value() == 429) {
-                                                        try {
-                                                            JsonNode errorJson = objectMapper.readTree(errorBody);
-                                                            JsonNode details = errorJson.path("error").path("details");
-                                                            long retryDelaySeconds = 5;
-
-                                                            if (details.isArray()) {
-                                                                for (JsonNode detail : details) {
-                                                                    if ("google.rpc.RetryInfo"
-                                                                            .equals(detail.path("@type").asText())) {
-                                                                        String retryDelay = detail.path("retryDelay")
-                                                                                .asText();
-
-                                                                        if (retryDelay.endsWith("s")) {
-                                                                            try {
-                                                                                retryDelaySeconds = (long) Math.ceil(
-                                                                                        Double.parseDouble(retryDelay
-                                                                                                .substring(0, retryDelay
-                                                                                                        .length()
-                                                                                                        - 1)));
-                                                                            } catch (NumberFormatException e) {
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-
-                                                            return Mono.delay(Duration.ofSeconds(retryDelaySeconds))
-                                                                    .then(Mono
-                                                                            .error(new RuntimeException("RETRY_429")));
-                                                        } catch (Exception e) {
-                                                            log.error("Erro ao processar resposta 429: {}",
-                                                                    e.getMessage());
-                                                            return Mono.error(new BusinessException(
-                                                                    "Quota da API do Google Gemini excedida. Tente novamente mais tarde."));
-                                                        }
-                                                    }
-
-                                                    log.error("Erro da API Gemini - Status: {}, Body: {}",
-                                                            clientResponse.statusCode(), errorBody);
-                                                    return Mono.error(new BusinessException(
-                                                            "Erro na API do Google Gemini (Status "
-                                                                    + clientResponse.statusCode() + "): " + errorBody));
-                                                });
-                                    })
-                            .bodyToMono(String.class)
-                            .timeout(Duration.ofSeconds(60))
-                            .block();
-
-                    if (response != null && !response.isEmpty()) {
-                        break;
-                    }
-                } catch (RuntimeException e) {
-                    if (e.getMessage() != null && e.getMessage().contains("RETRY_429")) {
-                        retryCount++;
-                        if (retryCount >= maxRetries) {
-                            throw new BusinessException("Quota da API do Google Gemini excedida após " + maxRetries
-                                    + " tentativas. Tente novamente mais tarde.");
-                        }
-                        continue;
-                    }
-                    throw e;
-                }
-            }
-
-            if (response == null || response.isEmpty()) {
-                throw new BusinessException(
-                        "Não foi possível obter resposta da API do Google Gemini após " + maxRetries + " tentativas.");
-            }
-
-            log.info("Resposta recebida da API do Gemini: {} caracteres", response != null ? response.length() : 0);
-
-            if (response == null || response.isEmpty()) {
-                log.error("Resposta vazia da API do Gemini");
-                throw new BusinessException(
-                        "A API do Google Gemini retornou uma resposta vazia. Tente novamente mais tarde.");
-            }
-
-            JsonNode jsonNode = objectMapper.readTree(response);
-
-            if (jsonNode.has("error")) {
-                String errorMessage = jsonNode.path("error").path("message")
-                        .asText("Erro desconhecido da API do Gemini");
-                log.error("Erro retornado pela API do Gemini: {}", errorMessage);
-                throw new BusinessException("Erro na API do Google Gemini: " + errorMessage);
-            }
-
-            JsonNode candidates = jsonNode.path("candidates");
-
-            if (candidates.isArray() && candidates.size() > 0) {
-                JsonNode contentNode = candidates.get(0).path("content");
-                JsonNode parts = contentNode.path("parts");
-
-                if (parts.isArray() && parts.size() > 0) {
-                    String text = parts.get(0).path("text").asText();
-                    log.info("Texto extraído da resposta: {} caracteres", text.length());
-                    return text;
-                }
-            }
-
-            log.error("Não foi possível extrair texto da resposta da API do Gemini");
-            throw new BusinessException(
-                    "Não foi possível processar a resposta da API do Google Gemini. Tente novamente mais tarde.");
+            String text = response.text();
+            log.info("Texto extraído da resposta: {} caracteres", text.length());
+            return text;
 
         } catch (BusinessException e) {
             throw e;
-        } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
-            log.error("Erro HTTP da API do Gemini - Status: {}, Response: {}", e.getStatusCode(),
-                    e.getResponseBodyAsString());
-            throw new BusinessException(
-                    "Erro na API do Google Gemini (Status " + e.getStatusCode() + "): " + e.getResponseBodyAsString());
         } catch (Exception e) {
             log.error("Erro ao chamar API do Gemini: {}", e.getMessage(), e);
             throw new BusinessException("Erro ao comunicar com a API do Google Gemini: " + e.getMessage());
